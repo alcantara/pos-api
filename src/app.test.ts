@@ -3,7 +3,14 @@ import { buildApp } from "./app.js";
 import { loadEnv } from "./config/env.js";
 
 function makeApp() {
-  return buildApp(loadEnv({ NODE_ENV: "test", PORT: "3000", LOG_LEVEL: "silent" }));
+  return buildApp(
+    loadEnv({
+      NODE_ENV: "test",
+      PORT: "3000",
+      LOG_LEVEL: "silent",
+      DATABASE_URL: "file::memory:",
+    }),
+  );
 }
 
 describe("buildApp", () => {

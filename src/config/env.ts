@@ -7,8 +7,10 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
-  // Required starting in Phase 2 (database).
-  DATABASE_URL: z.string().min(1).optional(),
+  /** `file:./dev.db` (SQLite) or `postgresql://...` (PostgreSQL). */
+  DATABASE_URL: z.string().min(1),
+  /** Test-only PostgreSQL target; when set, integration tests cover it. */
+  TEST_POSTGRES_URL: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
