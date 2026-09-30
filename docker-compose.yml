@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pdv
+    volumes:
+      # postgres:18+ expects the mount at /var/lib/postgresql (data lands in a
+      # major-version subdirectory, e.g. /var/lib/postgresql/data/18).
+      - pdv-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pdv"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/pdv
+      PORT: 3000
+      LOG_LEVEL: info
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pdv-postgres-data:

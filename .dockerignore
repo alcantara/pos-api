@@ -1,0 +1,18 @@
+# Dependencies and build output
+node_modules
+dist
+coverage
+
+# VCS / tooling scratch
+.git
+.husky
+.scratch
+
+# Local environment and data — never bake into the image
+.env
+.env.*
+*.log
+*.db*
+
+# NOTE: drizzle/ is intentionally NOT ignored — the runtime loads SQL
+# migrations from it at startup.
