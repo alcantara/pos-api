@@ -1,17 +1,36 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Env } from "./config/env.js";
+import { createDependencies } from "./infrastructure/dependencies.js";
+import { registerErrorHandling } from "./interfaces/http/errors.js";
+import { API_PREFIX } from "./interfaces/http/hateoas.js";
+import { registerProductRoutes } from "./interfaces/http/routes/product-routes.js";
 
-export function buildApp(env: Env): FastifyInstance {
+/**
+ * Builds the HTTP server: opens the database selected by `DATABASE_URL`
+ * (applying pending migrations), wires dependencies and registers routes.
+ * `app.close()` releases database connections.
+ */
+export async function buildApp(env: Env): Promise<FastifyInstance> {
+  const { dependencies, close } = await createDependencies(env);
+
   const app = Fastify({
-    logger:
-      env.NODE_ENV === "test"
-        ? false
-        : {
-            level: env.LOG_LEVEL,
-          },
+    logger: env.NODE_ENV === "test" ? false : { level: env.LOG_LEVEL },
   });
 
+  app.addHook("onClose", async () => {
+    await close();
+  });
+
+  registerErrorHandling(app);
+
   app.get("/health", () => ({ status: "ok" }));
+
+  await app.register(
+    (api) => {
+      registerProductRoutes(api, dependencies);
+    },
+    { prefix: API_PREFIX },
+  );
 
   return app;
 }

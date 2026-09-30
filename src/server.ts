@@ -4,7 +4,7 @@ import { loadDotEnv, loadEnv } from "./config/env.js";
 loadDotEnv();
 
 const env = loadEnv();
-const app = buildApp(env);
+const app = await buildApp(env);
 
 app
   .listen({ port: env.PORT, host: "0.0.0.0" })
