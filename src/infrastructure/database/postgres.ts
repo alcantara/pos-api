@@ -1,10 +1,16 @@
 import type { PgDatabase } from "drizzle-orm/pg-core";
+import { migrate as applyMigrations } from "drizzle-orm/postgres-js/migrator";
 import {
   drizzle,
   type PostgresJsDatabase,
   type PostgresJsQueryResultHKT,
 } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { fileURLToPath } from "node:url";
+
+const migrationsFolder = fileURLToPath(
+  new URL("../../../drizzle/postgres", import.meta.url),
+);
 
 /**
  * Query handle accepted by repositories. `PgTransaction` extends
@@ -23,7 +29,10 @@ export class PostgresDatabase {
   private readonly client: postgres.Sql;
 
   constructor(url: string) {
-    this.client = postgres(url, { max: 10 });
+    // Notices (e.g. "schema already exists, skipping" from idempotent
+    // migrations) are informational only; postgres.js' default handler would
+    // print them to stdout, bypassing the structured logger.
+    this.client = postgres(url, { max: 10, onnotice: () => {} });
     this.db = drizzle(this.client);
   }
 
@@ -34,6 +43,11 @@ export class PostgresDatabase {
   /** Runs `fn` inside a database transaction (native async support). */
   async transaction<T>(fn: (ctx: PgContext) => Promise<T>): Promise<T> {
     return this.db.transaction((tx) => fn({ db: tx }));
+  }
+
+  /** Applies pending PostgreSQL migrations (idempotent). */
+  migrate(): Promise<void> {
+    return applyMigrations(this.db, { migrationsFolder });
   }
 
   async close(): Promise<void> {

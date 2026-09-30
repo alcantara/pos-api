@@ -1,5 +1,11 @@
 import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { migrate as applyMigrations } from "drizzle-orm/better-sqlite3/migrator";
+import { fileURLToPath } from "node:url";
+
+const migrationsFolder = fileURLToPath(
+  new URL("../../../drizzle/sqlite", import.meta.url),
+);
 
 /**
  * Serializes database access within this process.
@@ -87,6 +93,11 @@ export class SqliteDatabase {
         throw error;
       }
     });
+  }
+
+  /** Applies pending SQLite migrations on this connection (idempotent). */
+  migrate(): void {
+    applyMigrations(this.db, { migrationsFolder });
   }
 
   close(): void {

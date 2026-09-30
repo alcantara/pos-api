@@ -1,26 +1,21 @@
 import { fileURLToPath } from "node:url";
-import { migrate as migrateSqlite } from "drizzle-orm/better-sqlite3/migrator";
-import { migrate as migratePostgres } from "drizzle-orm/postgres-js/migrator";
 import { loadDotEnv, loadEnv } from "../../config/env.js";
 import { resolveDialect, sqliteFilename } from "./client.js";
 import { PostgresDatabase } from "./postgres.js";
 import { SqliteDatabase } from "./sqlite.js";
 
-const sqliteMigrationsFolder = fileURLToPath(
-  new URL("../../../drizzle/sqlite", import.meta.url),
-);
-const postgresMigrationsFolder = fileURLToPath(
-  new URL("../../../drizzle/postgres", import.meta.url),
-);
-
-/** Applies pending migrations for the given `DATABASE_URL`. Idempotent. */
+/**
+ * Applies pending migrations for the given `DATABASE_URL`. Idempotent.
+ * (`SqliteDatabase.migrate` / `PostgresDatabase.migrate` do the work on a
+ * single connection — required for in-memory SQLite.)
+ */
 export function runMigrations(databaseUrl: string): void | Promise<void> {
   const dialect = resolveDialect(databaseUrl);
 
   if (dialect === "sqlite") {
     const database = new SqliteDatabase(sqliteFilename(databaseUrl));
     try {
-      migrateSqlite(database.db, { migrationsFolder: sqliteMigrationsFolder });
+      database.migrate();
     } finally {
       database.close();
     }
@@ -28,9 +23,7 @@ export function runMigrations(databaseUrl: string): void | Promise<void> {
   }
 
   const database = new PostgresDatabase(databaseUrl);
-  return migratePostgres(database.db, {
-    migrationsFolder: postgresMigrationsFolder,
-  }).finally(() => database.close());
+  return database.migrate().finally(() => database.close());
 }
 
 async function main(): Promise<void> {
