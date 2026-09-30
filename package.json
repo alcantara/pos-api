@@ -36,6 +36,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate --config=drizzle.config.sqlite.ts && drizzle-kit generate --config=drizzle.config.postgres.ts",
+    "db:migrate": "tsx src/infrastructure/database/migrate.ts",
+    "db:reset": "tsx src/infrastructure/database/reset.ts",
     "prepare": "husky"
   },
   "lint-staged": {
