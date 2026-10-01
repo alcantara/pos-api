@@ -8,16 +8,16 @@ describe("resolveDialect", () => {
 
   it("selects sqlite for bare paths", () => {
     expect(resolveDialect("./dev.db")).toBe("sqlite");
-    expect(resolveDialect("/var/data/pdv.db")).toBe("sqlite");
+    expect(resolveDialect("/var/data/pos.db")).toBe("sqlite");
   });
 
   it("selects postgres for postgres URLs", () => {
-    expect(resolveDialect("postgres://localhost/pdv")).toBe("postgres");
-    expect(resolveDialect("postgresql://localhost/pdv")).toBe("postgres");
+    expect(resolveDialect("postgres://localhost/pos")).toBe("postgres");
+    expect(resolveDialect("postgresql://localhost/pos")).toBe("postgres");
   });
 
   it("rejects unknown protocols", () => {
-    expect(() => resolveDialect("mysql://localhost/pdv")).toThrow(
+    expect(() => resolveDialect("mysql://localhost/pos")).toThrow(
       /Unsupported DATABASE_URL/,
     );
   });

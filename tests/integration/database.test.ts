@@ -310,7 +310,7 @@ runDatabaseSuite(createSqliteHarness());
 
 describe("sqlite: file database migrations", () => {
   it("applies migrations to a file-based database and is idempotent", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "pdv-sqlite-"));
+    const dir = mkdtempSync(join(tmpdir(), "pos-sqlite-"));
     const url = `file:${join(dir, "test.db")}`;
 
     await runMigrations(url);

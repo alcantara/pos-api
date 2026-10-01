@@ -1,6 +1,6 @@
-# PDV API — Point of Sale REST API
+# POS API — Point of Sale REST API
 
-Production-quality REST API for a Point of Sale (PDV/POS) system, built with
+Production-quality REST API for a Point of Sale (POS) system, built with
 **TypeScript, Fastify, Drizzle ORM, SQLite/PostgreSQL, Zod, and Vitest**.
 
 ## What it is

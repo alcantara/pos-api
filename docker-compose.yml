@@ -1,16 +1,18 @@
+name: pos-api
+
 services:
   db:
     image: postgres:18-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: pdv
+      POSTGRES_DB: pos
     volumes:
       # postgres:18+ expects the mount at /var/lib/postgresql (data lands in a
       # major-version subdirectory, e.g. /var/lib/postgresql/data/18).
-      - pdv-postgres-data:/var/lib/postgresql
+      - pos-postgres-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d pdv"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pos"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -23,7 +25,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/pdv
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/pos
       PORT: 3000
       LOG_LEVEL: info
       NODE_ENV: production
@@ -32,4 +34,4 @@ services:
         condition: service_healthy
 
 volumes:
-  pdv-postgres-data:
+  pos-postgres-data:
