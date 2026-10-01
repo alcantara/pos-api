@@ -6,9 +6,10 @@ Production-quality REST API for a Point of Sale (POS) system, built with
 ## What it is
 
 Greenfield portfolio project demonstrating professional backend engineering:
-clean architecture, OAuth 2.0 / OpenID Connect authentication, dual-dialect
-database support, and a three-tier test suite covering SQLite and PostgreSQL.
-It is built phase by phase according to the roadmap below.
+clean architecture, OAuth 2.0 / OpenID Connect authentication, role-based
+authorization, dual-dialect database support, and a three-tier test suite
+covering SQLite and PostgreSQL. It is built phase by phase according to the
+roadmap below.
 
 ## Features
 
@@ -19,12 +20,12 @@ Implemented:
 - REST + HATEOAS, offset pagination (max 100), consistent error envelope
 - SQLite and PostgreSQL selected through `DATABASE_URL`
 - Zod input validation at the HTTP boundary, sanitized errors, `/health`
+- Role-based authorization (ADMIN / MANAGER / CASHIER) via `requireRole` guards
 - Structured logging (pino) with request IDs
 - Docker, Docker Compose, GitHub Actions CI, three-tier Vitest suite
 
-Planned (Phases 7–15):
+Planned (Phases 8–15):
 
-- RBAC route guards (ADMIN / MANAGER / CASHIER) and seeded users
 - Transactional sales with stock validation, inventory movements
 - Rate limiting, security headers, CORS, CSRF protection
 - OpenAPI specification and deployment pipeline

@@ -1,9 +1,9 @@
 # Security
 
-> Phase 0 specification. Implemented so far: OIDC login (PKCE, state, nonce,
+> Phase 0 specification. Implemented: OIDC login (PKCE, state, nonce,
 > issuer/signature/expiration checks), stateless signed HttpOnly cookies,
-> fail-closed configuration, sanitized error responses, parameterized queries.
-> Pending: `requireRole` route guards (Phase 7), rate limiting, CORS,
+> fail-closed configuration, sanitized error responses, parameterized queries,
+> `requireRole` guards on every resource route. Pending: rate limiting, CORS,
 > security headers, audit log (Phase 10).
 
 ## Authentication
@@ -22,7 +22,24 @@ Never trust identity or role information supplied directly by the client.
 ## Authorization
 
 RBAC with three roles: ADMIN, MANAGER, CASHIER. Centralized via an explicit
-`requireRole(...)` mechanism — never hidden inside repositories.
+`requireRole(...)` mechanism (`src/interfaces/http/authz.ts`) — never hidden
+inside repositories. The guard resolves the `pos_session` cookie, reloads the
+user on every request (so role changes and deletions apply immediately) and
+then checks the role.
+
+| Operation                      | ADMIN | MANAGER | CASHIER |
+| ------------------------------ | ----- | ------- | ------- |
+| Read collections and items     | yes   | yes     | yes     |
+| Create, update, delete records | yes   | yes     | no      |
+
+A missing or invalid session answers 401 `UNAUTHORIZED`; an authenticated user
+without the required role answers 403 `FORBIDDEN`. Without `COOKIE_SECRET` the
+guard fails closed with 503 `AUTH_NOT_CONFIGURED`.
+
+`pnpm db:seed` creates one user per role — `admin@pos.local`, `manager@pos.local`
+and `cashier@pos.local`, with `passwordHash` null. Users arriving through OIDC
+are created as CASHIER; seeding by email is how an account is promoted, and the
+seed never overwrites a role changed afterwards.
 
 ## Hard controls
 

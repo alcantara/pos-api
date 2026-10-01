@@ -59,6 +59,21 @@ Response envelope:
 
 `prev`/`next` are omitted at the boundaries.
 
+## Authorization
+
+Every resource route requires a valid `pos_session` cookie and a role:
+
+| Operation                 | Roles              | Failure |
+| ------------------------- | ------------------ | ------- |
+| `GET` collection or item  | any of the three   | 401/403 |
+| `POST`, `PATCH`, `DELETE` | `ADMIN`, `MANAGER` | 401/403 |
+
+Missing, tampered or expired session → 401 `UNAUTHORIZED`. Authenticated but
+not permitted → 403 `FORBIDDEN`. Missing `COOKIE_SECRET` → 503
+`AUTH_NOT_CONFIGURED`.
+
+`/auth/login` and `/auth/callback` are public; `/health` is public.
+
 ## Resources
 
 | Method   | Path                                                 | Success                   |

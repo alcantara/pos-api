@@ -6,6 +6,7 @@
 pnpm install
 cp .env.example .env   # fill DATABASE_URL and OAuth credentials
 pnpm db:migrate
+pnpm db:seed   # admin@pos.local, manager@pos.local, cashier@pos.local
 pnpm dev
 ```
 
