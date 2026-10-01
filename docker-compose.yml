@@ -7,10 +7,17 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: pos
+    ports:
+      # Published on loopback so integration tests can reach it from the host
+      # (TEST_POSTGRES_URL). Set POSTGRES_HOST_PORT when a local PostgreSQL
+      # already occupies 5432. Never bind this to a public interface.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       # postgres:18+ expects the mount at /var/lib/postgresql (data lands in a
       # major-version subdirectory, e.g. /var/lib/postgresql/data/18).
       - pos-postgres-data:/var/lib/postgresql
+      # Creates pos_dev and pos_test on first initialization.
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/10-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d pos"]
       interval: 5s

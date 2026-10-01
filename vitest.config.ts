@@ -6,5 +6,6 @@ export default defineConfig({
       DATABASE_URL: "file::memory:",
     },
     setupFiles: ["tests/setup.ts"],
+    globalSetup: ["tests/global-setup.ts"],
   },
 });

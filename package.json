@@ -44,6 +44,10 @@
     "db:migrate": "tsx src/infrastructure/database/migrate.ts",
     "db:reset": "tsx src/infrastructure/database/reset.ts",
     "db:seed": "tsx src/infrastructure/database/seed.ts",
+    "docker:up": "docker compose up -d --wait db",
+    "docker:down": "docker compose down",
+    "docker:down:volumes": "docker compose down -v",
+    "docker:stack": "docker compose up --build",
     "prepare": "husky"
   },
   "lint-staged": {

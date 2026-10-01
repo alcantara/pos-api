@@ -26,10 +26,43 @@ pnpm dev
 
 - `pnpm dev` — local dev with hot reload
 - `pnpm build && pnpm start` — production build
-- `pnpm db:migrate` / `pnpm db:seed` — schema / deterministic users
+- `pnpm db:migrate` / `pnpm db:seed` — schema / deterministic users + catalog
 - `pnpm test` — all tests
 - `pnpm test:unit` / `pnpm test:integration` / `pnpm test:e2e` — per level
 - `pnpm lint` / `pnpm typecheck` — code quality
+
+## Docker
+
+| Script                     | Effect                                                |
+| -------------------------- | ----------------------------------------------------- |
+| `pnpm docker:up`           | starts the PostgreSQL service and waits until healthy |
+| `pnpm docker:down`         | stops the stack, keeping data                         |
+| `pnpm docker:down:volumes` | stops the stack and **deletes** the database volume   |
+| `pnpm docker:stack`        | builds the image and runs the API against PostgreSQL  |
+
+The service publishes `127.0.0.1:5432` by default. If a local PostgreSQL
+already owns 5432, choose another host port:
+
+```bash
+POSTGRES_HOST_PORT=5433 pnpm docker:up
+```
+
+`docker/postgres/init.sql` creates `pos_dev` and `pos_test` the first time the
+volume is initialized, so both URLs documented in `.env.example` work. Init
+scripts do not re-run on an existing volume — use `pnpm docker:down:volumes` to
+recreate it.
+
+To run the integration suite against that server, point `TEST_POSTGRES_URL` at
+it (the Postgres target is skipped when the variable is unset):
+
+```bash
+TEST_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5432/pos_test \
+  pnpm test:integration
+```
+
+`tests/global-setup.ts` migrates every shared target once before Vitest fans
+out, so the suite is green on the first run against an empty database; each test
+file then migrates a no-op.
 
 ## Testing
 
