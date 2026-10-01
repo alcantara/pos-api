@@ -1,31 +1,23 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { FastifyInstance } from "fastify";
-import { buildApp } from "../../src/app.js";
-import { loadEnv } from "../../src/config/env.js";
+import type { AuthenticatedApp } from "../helpers/auth.js";
+import { buildAuthenticatedApp } from "../helpers/auth.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe("categories HTTP API", () => {
-  let app: FastifyInstance;
+  let context: AuthenticatedApp;
 
   beforeAll(async () => {
-    app = await buildApp(
-      loadEnv({
-        NODE_ENV: "test",
-        PORT: "3000",
-        LOG_LEVEL: "silent",
-        DATABASE_URL: "file::memory:",
-      }),
-    );
+    context = await buildAuthenticatedApp();
   });
 
   afterAll(async () => {
-    await app.close();
+    await context.app.close();
   });
 
   async function createCategory(name: string) {
-    return app.inject({
+    return context.inject({
       method: "POST",
       url: "/api/v1/categories",
       payload: { name },
@@ -69,7 +61,7 @@ describe("categories HTTP API", () => {
     });
 
     it("rejects unknown fields with 400", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "POST",
         url: "/api/v1/categories",
         payload: { name: "X", description: "not allowed" },
@@ -85,7 +77,7 @@ describe("categories HTTP API", () => {
       const created = await createCategory("Cables");
       const { id } = created.json();
 
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: `/api/v1/categories/${id}`,
       });
@@ -97,7 +89,7 @@ describe("categories HTTP API", () => {
     });
 
     it("returns 404 CATEGORY_NOT_FOUND for an unknown id", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: `/api/v1/categories/${randomUUID()}`,
       });
@@ -109,7 +101,7 @@ describe("categories HTTP API", () => {
     });
 
     it("returns 400 for a malformed id", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: "/api/v1/categories/not-a-uuid",
       });
@@ -127,7 +119,7 @@ describe("categories HTTP API", () => {
       await createCategory(`${token} alpha`);
       await createCategory(`${token} beta`);
 
-      const first = await app.inject({
+      const first = await context.inject({
         method: "GET",
         url: `/api/v1/categories?search=${token}&limit=2&page=1&sort=name&order=asc`,
       });
@@ -151,7 +143,7 @@ describe("categories HTTP API", () => {
       expect(body._links.prev).toBeUndefined();
       expect(body._links.next.href).toContain("page=2");
 
-      const second = await app.inject({
+      const second = await context.inject({
         method: "GET",
         url: `/api/v1/categories?search=${token}&limit=2&page=2&sort=name&order=asc`,
       });
@@ -162,7 +154,7 @@ describe("categories HTTP API", () => {
     });
 
     it("rejects limit above 100 with 400", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: "/api/v1/categories?limit=101",
       });
@@ -172,7 +164,7 @@ describe("categories HTTP API", () => {
     });
 
     it("rejects a sort field outside the allowlist with 400", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: "/api/v1/categories?sort=id",
       });
@@ -187,7 +179,7 @@ describe("categories HTTP API", () => {
       const created = await createCategory("Old category name");
       const { id } = created.json();
 
-      const response = await app.inject({
+      const response = await context.inject({
         method: "PATCH",
         url: `/api/v1/categories/${id}`,
         payload: { name: "New category name" },
@@ -200,7 +192,7 @@ describe("categories HTTP API", () => {
     it("rejects an empty body with 400", async () => {
       const created = await createCategory("Empty patch target");
 
-      const response = await app.inject({
+      const response = await context.inject({
         method: "PATCH",
         url: `/api/v1/categories/${created.json().id}`,
         payload: {},
@@ -211,7 +203,7 @@ describe("categories HTTP API", () => {
     });
 
     it("returns 404 for a missing category", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "PATCH",
         url: `/api/v1/categories/${randomUUID()}`,
         payload: { name: "x" },
@@ -227,14 +219,14 @@ describe("categories HTTP API", () => {
       const created = await createCategory("Disposable category");
       const { id } = created.json();
 
-      const deleted = await app.inject({
+      const deleted = await context.inject({
         method: "DELETE",
         url: `/api/v1/categories/${id}`,
       });
       expect(deleted.statusCode).toBe(204);
       expect(deleted.body).toBe("");
 
-      const gone = await app.inject({
+      const gone = await context.inject({
         method: "GET",
         url: `/api/v1/categories/${id}`,
       });
@@ -242,7 +234,7 @@ describe("categories HTTP API", () => {
     });
 
     it("returns 404 when deleting a missing category", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "DELETE",
         url: `/api/v1/categories/${randomUUID()}`,
       });

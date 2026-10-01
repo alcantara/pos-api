@@ -1,31 +1,23 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { FastifyInstance } from "fastify";
-import { buildApp } from "../../src/app.js";
-import { loadEnv } from "../../src/config/env.js";
+import type { AuthenticatedApp } from "../helpers/auth.js";
+import { buildAuthenticatedApp } from "../helpers/auth.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe("products HTTP API", () => {
-  let app: FastifyInstance;
+  let context: AuthenticatedApp;
 
   beforeAll(async () => {
-    app = await buildApp(
-      loadEnv({
-        NODE_ENV: "test",
-        PORT: "3000",
-        LOG_LEVEL: "silent",
-        DATABASE_URL: "file::memory:",
-      }),
-    );
+    context = await buildAuthenticatedApp();
   });
 
   afterAll(async () => {
-    await app.close();
+    await context.app.close();
   });
 
   async function createProduct(payload: Record<string, unknown>) {
-    return app.inject({ method: "POST", url: "/api/v1/products", payload });
+    return context.inject({ method: "POST", url: "/api/v1/products", payload });
   }
 
   describe("POST /api/v1/products", () => {
@@ -99,7 +91,7 @@ describe("products HTTP API", () => {
     });
 
     it("rejects malformed JSON with 400", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "POST",
         url: "/api/v1/products",
         headers: { "content-type": "application/json" },
@@ -121,7 +113,7 @@ describe("products HTTP API", () => {
       });
       const { id } = created.json();
 
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: `/api/v1/products/${id}`,
       });
@@ -134,7 +126,7 @@ describe("products HTTP API", () => {
     });
 
     it("returns 404 PRODUCT_NOT_FOUND for an unknown id", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: `/api/v1/products/${randomUUID()}`,
       });
@@ -146,7 +138,7 @@ describe("products HTTP API", () => {
     });
 
     it("returns 400 for a malformed id", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: "/api/v1/products/not-a-uuid",
       });
@@ -166,7 +158,7 @@ describe("products HTTP API", () => {
       await seed(`${token} mid`, 200);
       await seed(`${token} high`, 300);
 
-      const first = await app.inject({
+      const first = await context.inject({
         method: "GET",
         url: `/api/v1/products?search=${token}&limit=2&page=1&sort=price&order=asc`,
       });
@@ -185,7 +177,7 @@ describe("products HTTP API", () => {
       expect(body._links.prev).toBeUndefined();
       expect(body._links.next.href).toContain("page=2");
 
-      const second = await app.inject({
+      const second = await context.inject({
         method: "GET",
         url: `/api/v1/products?search=${token}&limit=2&page=2&sort=price&order=asc`,
       });
@@ -197,11 +189,11 @@ describe("products HTTP API", () => {
     });
 
     it("matches search case-insensitively", async () => {
-      const lower = await app.inject({
+      const lower = await context.inject({
         method: "GET",
         url: `/api/v1/products?search=${token.toLowerCase()}`,
       });
-      const upper = await app.inject({
+      const upper = await context.inject({
         method: "GET",
         url: `/api/v1/products?search=${token.toUpperCase()}`,
       });
@@ -214,7 +206,7 @@ describe("products HTTP API", () => {
     it("treats LIKE wildcards in search as literal text", async () => {
       await createProduct({ sku: "PCT-1", name: "Cable 50% off", priceCents: 10 });
 
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: "/api/v1/products?search=" + encodeURIComponent("50%"),
       });
@@ -226,7 +218,7 @@ describe("products HTTP API", () => {
     });
 
     it("rejects limit above 100 with 400", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: "/api/v1/products?limit=101",
       });
@@ -236,7 +228,7 @@ describe("products HTTP API", () => {
     });
 
     it("rejects a sort field outside the allowlist with 400", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: "/api/v1/products?sort=description",
       });
@@ -255,7 +247,7 @@ describe("products HTTP API", () => {
       });
       const { id } = created.json();
 
-      const response = await app.inject({
+      const response = await context.inject({
         method: "PATCH",
         url: `/api/v1/products/${id}`,
         payload: { name: "New name" },
@@ -275,7 +267,7 @@ describe("products HTTP API", () => {
         priceCents: 1,
       });
 
-      const response = await app.inject({
+      const response = await context.inject({
         method: "PATCH",
         url: `/api/v1/products/${created.json().id}`,
         payload: {},
@@ -286,7 +278,7 @@ describe("products HTTP API", () => {
     });
 
     it("returns 404 for a missing product", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "PATCH",
         url: `/api/v1/products/${randomUUID()}`,
         payload: { name: "x" },
@@ -306,14 +298,14 @@ describe("products HTTP API", () => {
       });
       const { id } = created.json();
 
-      const deleted = await app.inject({
+      const deleted = await context.inject({
         method: "DELETE",
         url: `/api/v1/products/${id}`,
       });
       expect(deleted.statusCode).toBe(204);
       expect(deleted.body).toBe("");
 
-      const gone = await app.inject({
+      const gone = await context.inject({
         method: "GET",
         url: `/api/v1/products/${id}`,
       });
@@ -321,7 +313,7 @@ describe("products HTTP API", () => {
     });
 
     it("returns 404 when deleting a missing product", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "DELETE",
         url: `/api/v1/products/${randomUUID()}`,
       });
@@ -333,7 +325,7 @@ describe("products HTTP API", () => {
 
   describe("category references", () => {
     it("creates a product under an existing category", async () => {
-      const category = await app.inject({
+      const category = await context.inject({
         method: "POST",
         url: "/api/v1/categories",
         payload: { name: `Cat ${randomUUID()}` },
@@ -366,7 +358,7 @@ describe("products HTTP API", () => {
     });
 
     it("assigns and clears categoryId via PATCH", async () => {
-      const category = await app.inject({
+      const category = await context.inject({
         method: "POST",
         url: "/api/v1/categories",
         payload: { name: `Cat ${randomUUID()}` },
@@ -380,7 +372,7 @@ describe("products HTTP API", () => {
       });
       const { id } = created.json();
 
-      const assigned = await app.inject({
+      const assigned = await context.inject({
         method: "PATCH",
         url: `/api/v1/products/${id}`,
         payload: { categoryId },
@@ -388,7 +380,7 @@ describe("products HTTP API", () => {
       expect(assigned.statusCode).toBe(200);
       expect(assigned.json().categoryId).toBe(categoryId);
 
-      const cleared = await app.inject({
+      const cleared = await context.inject({
         method: "PATCH",
         url: `/api/v1/products/${id}`,
         payload: { categoryId: null },

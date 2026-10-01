@@ -1,31 +1,23 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { FastifyInstance } from "fastify";
-import { buildApp } from "../../src/app.js";
-import { loadEnv } from "../../src/config/env.js";
+import type { AuthenticatedApp } from "../helpers/auth.js";
+import { buildAuthenticatedApp } from "../helpers/auth.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe("customers HTTP API", () => {
-  let app: FastifyInstance;
+  let context: AuthenticatedApp;
 
   beforeAll(async () => {
-    app = await buildApp(
-      loadEnv({
-        NODE_ENV: "test",
-        PORT: "3000",
-        LOG_LEVEL: "silent",
-        DATABASE_URL: "file::memory:",
-      }),
-    );
+    context = await buildAuthenticatedApp();
   });
 
   afterAll(async () => {
-    await app.close();
+    await context.app.close();
   });
 
   async function createCustomer(payload: Record<string, unknown>) {
-    return app.inject({
+    return context.inject({
       method: "POST",
       url: "/api/v1/customers",
       payload,
@@ -109,7 +101,7 @@ describe("customers HTTP API", () => {
       });
       const { id } = created.json();
 
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: `/api/v1/customers/${id}`,
       });
@@ -121,7 +113,7 @@ describe("customers HTTP API", () => {
     });
 
     it("returns 404 CUSTOMER_NOT_FOUND for an unknown id", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: `/api/v1/customers/${randomUUID()}`,
       });
@@ -133,7 +125,7 @@ describe("customers HTTP API", () => {
     });
 
     it("returns 400 for a malformed id", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: "/api/v1/customers/not-a-uuid",
       });
@@ -151,7 +143,7 @@ describe("customers HTTP API", () => {
       await createCustomer({ name: `${token} alpha` });
       await createCustomer({ name: `${token} beta` });
 
-      const first = await app.inject({
+      const first = await context.inject({
         method: "GET",
         url: `/api/v1/customers?search=${token}&limit=2&page=1&sort=name&order=asc`,
       });
@@ -175,7 +167,7 @@ describe("customers HTTP API", () => {
       expect(body._links.prev).toBeUndefined();
       expect(body._links.next.href).toContain("page=2");
 
-      const second = await app.inject({
+      const second = await context.inject({
         method: "GET",
         url: `/api/v1/customers?search=${token}&limit=2&page=2&sort=name&order=asc`,
       });
@@ -189,13 +181,13 @@ describe("customers HTTP API", () => {
       const email = `find-${randomUUID()}@example.com`;
       await createCustomer({ name: "Findable", email, phone: "11977776666" });
 
-      const byEmail = await app.inject({
+      const byEmail = await context.inject({
         method: "GET",
         url: `/api/v1/customers?search=${email.split("@")[0]}`,
       });
       expect(byEmail.json().pagination.total).toBeGreaterThanOrEqual(1);
 
-      const byPhone = await app.inject({
+      const byPhone = await context.inject({
         method: "GET",
         url: "/api/v1/customers?search=77776666",
       });
@@ -203,7 +195,7 @@ describe("customers HTTP API", () => {
     });
 
     it("rejects limit above 100 with 400", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: "/api/v1/customers?limit=101",
       });
@@ -213,7 +205,7 @@ describe("customers HTTP API", () => {
     });
 
     it("rejects a sort field outside the allowlist with 400", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "GET",
         url: "/api/v1/customers?sort=email",
       });
@@ -231,7 +223,7 @@ describe("customers HTTP API", () => {
       });
       const { id } = created.json();
 
-      const response = await app.inject({
+      const response = await context.inject({
         method: "PATCH",
         url: `/api/v1/customers/${id}`,
         payload: { name: "New name" },
@@ -247,7 +239,7 @@ describe("customers HTTP API", () => {
       const email = `clear-${randomUUID()}@example.com`;
       const created = await createCustomer({ name: "Clearable", email });
 
-      const response = await app.inject({
+      const response = await context.inject({
         method: "PATCH",
         url: `/api/v1/customers/${created.json().id}`,
         payload: { email: null },
@@ -260,7 +252,7 @@ describe("customers HTTP API", () => {
     it("rejects an empty body with 400", async () => {
       const created = await createCustomer({ name: "Empty patch target" });
 
-      const response = await app.inject({
+      const response = await context.inject({
         method: "PATCH",
         url: `/api/v1/customers/${created.json().id}`,
         payload: {},
@@ -271,7 +263,7 @@ describe("customers HTTP API", () => {
     });
 
     it("returns 404 for a missing customer", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "PATCH",
         url: `/api/v1/customers/${randomUUID()}`,
         payload: { name: "x" },
@@ -287,14 +279,14 @@ describe("customers HTTP API", () => {
       const created = await createCustomer({ name: "Disposable customer" });
       const { id } = created.json();
 
-      const deleted = await app.inject({
+      const deleted = await context.inject({
         method: "DELETE",
         url: `/api/v1/customers/${id}`,
       });
       expect(deleted.statusCode).toBe(204);
       expect(deleted.body).toBe("");
 
-      const gone = await app.inject({
+      const gone = await context.inject({
         method: "GET",
         url: `/api/v1/customers/${id}`,
       });
@@ -302,7 +294,7 @@ describe("customers HTTP API", () => {
     });
 
     it("returns 404 when deleting a missing customer", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "DELETE",
         url: `/api/v1/customers/${randomUUID()}`,
       });

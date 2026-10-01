@@ -1,30 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { FastifyInstance } from "fastify";
-import { buildApp } from "../../src/app.js";
-import { loadEnv } from "../../src/config/env.js";
+import type { AuthenticatedApp } from "../helpers/auth.js";
+import { buildAuthenticatedApp } from "../helpers/auth.js";
 
 describe("app e2e", () => {
-  let app: FastifyInstance;
+  let context: AuthenticatedApp;
 
   beforeAll(async () => {
-    app = await buildApp(
-      loadEnv({
-        NODE_ENV: "test",
-        PORT: "3000",
-        LOG_LEVEL: "silent",
-        DATABASE_URL: "file::memory:",
-      }),
-    );
+    context = await buildAuthenticatedApp();
   });
 
   afterAll(async () => {
-    await app.close();
+    await context.app.close();
   });
 
   describe("GET /health", () => {
     it("answers 200 with the service status", async () => {
-      const response = await app.inject({ method: "GET", url: "/health" });
+      const response = await context.inject({ method: "GET", url: "/health" });
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({ status: "ok" });
@@ -35,7 +27,7 @@ describe("app e2e", () => {
     it.each(["/", "/api/v1/nowhere", "/health/deep"])(
       "answers 404 for %s",
       async (url) => {
-        const response = await app.inject({ method: "GET", url });
+        const response = await context.inject({ method: "GET", url });
 
         expect(response.statusCode).toBe(404);
         expect(response.json()).toEqual({
@@ -45,7 +37,7 @@ describe("app e2e", () => {
     );
 
     it("answers 404 for an unsupported method", async () => {
-      const response = await app.inject({ method: "DELETE", url: "/health" });
+      const response = await context.inject({ method: "DELETE", url: "/health" });
 
       expect(response.statusCode).toBe(404);
       expect(response.json().error.code).toBe("NOT_FOUND");
@@ -54,7 +46,7 @@ describe("app e2e", () => {
 
   describe("malformed requests", () => {
     it("rejects an invalid JSON body", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "POST",
         url: "/api/v1/categories",
         headers: { "content-type": "application/json" },
@@ -66,7 +58,7 @@ describe("app e2e", () => {
     });
 
     it("rejects an unsupported content type", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "POST",
         url: "/api/v1/categories",
         headers: { "content-type": "application/xml" },
@@ -82,7 +74,7 @@ describe("app e2e", () => {
     it("keeps products consistent when their category is deleted", async () => {
       const suffix = randomUUID().slice(0, 8);
 
-      const category = await app.inject({
+      const category = await context.inject({
         method: "POST",
         url: "/api/v1/categories",
         payload: { name: `Journey ${suffix}` },
@@ -90,7 +82,7 @@ describe("app e2e", () => {
       expect(category.statusCode).toBe(201);
       const categoryId = category.json().id;
 
-      const product = await app.inject({
+      const product = await context.inject({
         method: "POST",
         url: "/api/v1/products",
         payload: {
@@ -104,7 +96,7 @@ describe("app e2e", () => {
       const productId = product.json().id;
       expect(product.json().categoryId).toBe(categoryId);
 
-      const search = await app.inject({
+      const search = await context.inject({
         method: "GET",
         url: `/api/v1/products?search=${encodeURIComponent(`Journey Keyboard ${suffix}`)}`,
       });
@@ -112,20 +104,20 @@ describe("app e2e", () => {
       expect(search.json().pagination.total).toBe(1);
       expect(search.json().data[0].id).toBe(productId);
 
-      const deleted = await app.inject({
+      const deleted = await context.inject({
         method: "DELETE",
         url: `/api/v1/categories/${categoryId}`,
       });
       expect(deleted.statusCode).toBe(204);
 
-      const refetched = await app.inject({
+      const refetched = await context.inject({
         method: "GET",
         url: `/api/v1/products/${productId}`,
       });
       expect(refetched.statusCode).toBe(200);
       expect(refetched.json().categoryId).toBeNull();
 
-      const gone = await app.inject({
+      const gone = await context.inject({
         method: "GET",
         url: `/api/v1/categories/${categoryId}`,
       });
@@ -136,7 +128,7 @@ describe("app e2e", () => {
     });
 
     it("rejects a product pointing at an unknown category", async () => {
-      const response = await app.inject({
+      const response = await context.inject({
         method: "POST",
         url: "/api/v1/products",
         payload: {
