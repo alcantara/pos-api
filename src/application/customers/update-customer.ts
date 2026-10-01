@@ -9,9 +9,7 @@ export interface UpdateCustomerInput {
   id: string;
   changes: {
     name?: string;
-    /** `null` clears the email; absent leaves it unchanged. */
     email?: string | null;
-    /** `null` clears the phone; absent leaves it unchanged. */
     phone?: string | null;
   };
 }

@@ -107,11 +107,6 @@ export class SqliteProductRepository implements ProductRepository {
   }
 }
 
-/**
- * SQLite `LIKE` is case-insensitive for ASCII; wildcards in user input are
- * escaped so searches match literally, with surrounding `%` for substring
- * matching.
- */
 function buildSearchFilter(search: string | undefined): SQL | undefined {
   if (!search) return undefined;
   const pattern = containsPattern(search);

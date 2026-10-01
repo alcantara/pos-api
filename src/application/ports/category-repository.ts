@@ -16,10 +16,6 @@ export interface PagedCategories {
   total: number;
 }
 
-/**
- * Narrow port for validating references from other aggregates (products)
- * without depending on the full category repository.
- */
 export interface CategoryLookup {
   findById(id: string): Promise<Category | null>;
 }

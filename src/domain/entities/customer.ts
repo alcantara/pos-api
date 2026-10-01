@@ -1,9 +1,5 @@
 import { DomainError } from "../errors/domain-error.js";
 
-/**
- * A person or company that buys products. `email` is optional but unique;
- * timestamps are epoch milliseconds (UTC).
- */
 export interface Customer {
   id: string;
   name: string;

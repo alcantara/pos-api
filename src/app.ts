@@ -8,11 +8,6 @@ import { registerCategoryRoutes } from "./interfaces/http/routes/category-routes
 import { registerCustomerRoutes } from "./interfaces/http/routes/customer-routes.js";
 import { registerProductRoutes } from "./interfaces/http/routes/product-routes.js";
 
-/**
- * Builds the HTTP server: opens the database selected by `DATABASE_URL`
- * (applying pending migrations), wires dependencies and registers routes.
- * `app.close()` releases database connections.
- */
 export async function buildApp(env: Env): Promise<FastifyInstance> {
   const { dependencies, close } = await createDependencies(env);
 

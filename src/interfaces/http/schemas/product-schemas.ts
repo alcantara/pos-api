@@ -1,11 +1,5 @@
 import { z } from "zod";
 
-/**
- * Request validation runs once, at the HTTP boundary. Schemas are `strict`:
- * unknown fields are rejected instead of silently ignored, so a typo'd PATCH
- * field cannot masquerade as a successful update.
- */
-
 export const createProductSchema = z
   .object({
     sku: z.string().trim().min(1).max(64),

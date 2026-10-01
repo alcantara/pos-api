@@ -3,11 +3,6 @@ import { fileURLToPath } from "node:url";
 import { resolveDialect, sqliteFilename } from "./client.js";
 import { PostgresDatabase } from "./postgres.js";
 
-/**
- * Drops and recreates the public schema (PostgreSQL) or deletes the database
- * file (SQLite). Refuses to run against databases whose name does not look
- * like a dev/test database.
- */
 export async function resetDatabase(databaseUrl: string): Promise<void> {
   const dialect = resolveDialect(databaseUrl);
 
@@ -19,9 +14,7 @@ export async function resetDatabase(databaseUrl: string): Promise<void> {
     for (const suffix of ["", "-wal", "-shm"]) {
       try {
         rmSync(`${filename}${suffix}`);
-      } catch {
-        // file may not exist
-      }
+      } catch {}
     }
     return;
   }
@@ -35,9 +28,6 @@ export async function resetDatabase(databaseUrl: string): Promise<void> {
 
   const database = new PostgresDatabase(databaseUrl);
   try {
-    // Two statements per schema: the extended query protocol does not allow
-    // batching. The `drizzle` schema holds migration bookkeeping and must go
-    // too, otherwise migrate would consider old migrations applied.
     await database.db.execute("DROP SCHEMA IF EXISTS drizzle CASCADE");
     await database.db.execute("DROP SCHEMA public CASCADE");
     await database.db.execute("CREATE SCHEMA public");

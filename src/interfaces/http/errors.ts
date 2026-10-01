@@ -2,10 +2,6 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { DomainError } from "../../domain/errors/domain-error.js";
 
-/**
- * Consistent error envelope: `{ "error": { "code", "message" } }`
- * (plus `details` for validation failures — input diagnostics only).
- */
 interface ErrorEnvelope {
   error: {
     code: string;
@@ -29,7 +25,6 @@ const STATUS_BY_CODE: Record<string, number> = {
   AUTH_NOT_CONFIGURED: 503,
 };
 
-/** Fastify errors carry a `statusCode`; anything else is treated as a 500. */
 function extractStatusCode(error: unknown): number {
   if (
     error instanceof Error &&
@@ -60,7 +55,6 @@ export function registerErrorHandling(app: FastifyInstance): void {
     if (error instanceof DomainError) {
       const status = STATUS_BY_CODE[error.code];
       if (status === undefined) {
-        // Unknown domain codes must not leak; log and sanitize.
         request.log.error({ code: error.code }, "unmapped domain error code");
         return reply.code(500).send({
           error: { code: "INTERNAL_ERROR", message: "Internal server error" },
@@ -80,7 +74,6 @@ export function registerErrorHandling(app: FastifyInstance): void {
         .send({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
     }
 
-    // Fastify-originated client errors (malformed JSON, oversized body, …).
     return reply.code(statusCode).send({
       error: {
         code: statusCode === 400 ? "VALIDATION_ERROR" : "BAD_REQUEST",

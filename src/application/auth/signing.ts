@@ -1,11 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { type z } from "zod";
 
-/**
- * Minimal signed-token primitive for stateless cookies: the payload stays
- * readable (no encryption needed — it is not secret from its owner) but any
- * tampering fails verification. Format: `base64url(json).base64url(hmac)`.
- */
 function signature(body: string, secret: string): string {
   return createHmac("sha256", secret).update(body).digest("base64url");
 }
@@ -15,11 +10,6 @@ export function sign(payload: object, secret: string): string {
   return `${body}.${signature(body, secret)}`;
 }
 
-/**
- * Verifies a signed token against `secret` (timing-safe comparison) and
- * validates its shape. Returns null for anything invalid — callers must
- * fail closed rather than guess.
- */
 export function unsign<S extends z.ZodType>(
   token: string,
   schema: S,

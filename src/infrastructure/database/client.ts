@@ -1,10 +1,5 @@
 export type Dialect = "sqlite" | "postgres";
 
-/**
- * Selects the database from `DATABASE_URL`:
- * - `file:./dev.db` or a bare path → SQLite
- * - `postgresql://...` / `postgres://...` → PostgreSQL
- */
 export function resolveDialect(databaseUrl: string): Dialect {
   if (
     databaseUrl.startsWith("postgres://") ||
@@ -20,7 +15,6 @@ export function resolveDialect(databaseUrl: string): Dialect {
   );
 }
 
-/** Extracts the filesystem path from a `DATABASE_URL` (e.g. `file:./dev.db`). */
 export function sqliteFilename(databaseUrl: string): string {
   return databaseUrl.startsWith("file:")
     ? databaseUrl.slice("file:".length)

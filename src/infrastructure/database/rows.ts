@@ -1,12 +1,3 @@
-/**
- * Row shapes returned by both dialects.
- *
- * These are infrastructure DTOs, deliberately identical for SQLite and
- * PostgreSQL (timestamps are epoch milliseconds, ids are UUID strings, money
- * is integer cents). Domain mappers convert rows to domain entities.
- * Integration tests assert both dialects produce exactly these shapes.
- */
-
 export interface UserRow {
   id: string;
   email: string;

@@ -30,6 +30,7 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      "no-empty": ["error", { allowEmptyCatch: true }],
     },
   },
   {

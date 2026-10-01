@@ -42,7 +42,6 @@ export function productLinks(id: string): Links {
   };
 }
 
-/** Rewrites the `page` query parameter of the current request URL. */
 export function withPage(url: string, page: number): string {
   const parsed = new URL(url, "http://placeholder.invalid");
   parsed.searchParams.set("page", String(page));

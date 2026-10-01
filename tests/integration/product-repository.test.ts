@@ -12,12 +12,6 @@ import type { Product } from "../../src/domain/entities/product.js";
 import type { ProductRepository } from "../../src/application/ports/product-repository.js";
 import { ConflictError } from "../../src/domain/errors/domain-error.js";
 
-/**
- * Repository behavior must hold on every supported engine, so this suite
- * runs against SQLite always and against PostgreSQL when TEST_POSTGRES_URL is
- * configured (always in CI — see tests/setup.ts).
- */
-
 function targets(): Array<{ name: string; databaseUrl: string }> {
   const env = loadEnv();
   const list = [{ name: "sqlite", databaseUrl: "file::memory:" }];
@@ -99,8 +93,6 @@ describe.each(targets())("product repository ($name)", (target) => {
   });
 
   afterAll(async () => {
-    // Best-effort cleanup keeps the shared PostgreSQL test database tidy:
-    // movements first (they block product deletion via foreign keys).
     for (const id of insertedMovementIds) {
       await deleteMovement(created.database, id).catch(() => undefined);
     }
@@ -191,7 +183,6 @@ describe.each(targets())("product repository ($name)", (target) => {
       sort: "name",
       order: "asc",
     });
-    // A non-escaped pattern would match every row in the table.
     expect(wildcard.total).toBe(1);
     expect(wildcard.rows[0]?.name).toBe(`${token} 50% Special`);
   });

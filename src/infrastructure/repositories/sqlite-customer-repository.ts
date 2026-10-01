@@ -101,7 +101,6 @@ export class SqliteCustomerRepository implements CustomerRepository {
   }
 }
 
-/** SQLite `LIKE` is case-insensitive for ASCII; wildcards are escaped. */
 function buildSearchFilter(search: string | undefined): SQL | undefined {
   if (!search) return undefined;
   const pattern = containsPattern(search);

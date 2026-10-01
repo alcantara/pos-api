@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { sign, unsign } from "./signing.js";
 
-/** Session lifetime: eight hours. */
 export const SESSION_TTL_SECONDS = 8 * 60 * 60;
 
 const sessionSchema = z.object({
@@ -12,7 +11,6 @@ const sessionSchema = z.object({
 
 export type SessionPayload = z.infer<typeof sessionSchema>;
 
-/** Issues a signed session token bound to `userId`. */
 export function createSessionToken(
   userId: string,
   secret: string,
@@ -22,7 +20,6 @@ export function createSessionToken(
   return sign({ sub: userId, iat, exp: iat + SESSION_TTL_SECONDS }, secret);
 }
 
-/** Returns null when the token is missing, tampered with or expired. */
 export function verifySessionToken(
   token: string,
   secret: string,

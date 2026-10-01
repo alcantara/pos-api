@@ -58,7 +58,6 @@ export class SqliteCategoryRepository implements CategoryRepository {
     }
   }
 
-  /** Products keep existing: `products.category_id` is `ON DELETE SET NULL`. */
   async delete(id: string): Promise<void> {
     await this.ctx.guard(async () => {
       await this.ctx.db.delete(categories).where(eq(categories.id, id));
@@ -89,7 +88,6 @@ export class SqliteCategoryRepository implements CategoryRepository {
   }
 }
 
-/** SQLite `LIKE` is case-insensitive for ASCII; wildcards are escaped. */
 function buildSearchFilter(search: string | undefined): SQL | undefined {
   if (!search) return undefined;
   const pattern = containsPattern(search);

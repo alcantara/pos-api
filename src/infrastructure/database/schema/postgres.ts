@@ -10,20 +10,6 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-/**
- * PostgreSQL dialect schema.
- *
- * Column names, constraints and indexes must stay in sync with
- * `sqlite.ts`. Integration tests run against both dialects to catch drift.
- *
- * Conventions:
- * - ids: UUID (native pg uuid type)
- * - money: integer minor units (cents), bigint mode number, CHECK >= 0
- * - timestamps: epoch milliseconds (UTC) stored as BIGINT so rows are
- *   structurally identical to SQLite and no timezone conversion is needed
- * - enums: TEXT + CHECK (portable across dialects)
- */
-
 const id = () => uuid("id").primaryKey();
 const createdAt = () => bigint("created_at", { mode: "number" }).notNull();
 const updatedAt = () => bigint("updated_at", { mode: "number" }).notNull();

@@ -10,14 +10,11 @@ import type { UserRepository } from "../ports/user-repository.js";
 import { verifyLoginState } from "./login-state.js";
 import { createSessionToken, SESSION_TTL_SECONDS } from "./session.js";
 
-/** Accounts provisioned through OIDC start with the least privileged role. */
 const DEFAULT_ROLE: Role = "CASHIER";
 
 export interface CallbackInput {
   code: string;
-  /** `state` returned by the provider in the callback query. */
   state: string;
-  /** Raw value of the pending-login cookie (null when absent). */
   stateCookie: string | null;
   redirectUri: string;
   cookieSecret: string;
@@ -35,12 +32,6 @@ function statesMatch(expected: string, provided: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/**
- * Completes the login: validates the pending-login cookie against the
- * returned `state`, exchanges the code through the provider (which verifies
- * the ID token), provisions or refreshes the local user, and issues a
- * session token. Roles are never taken from the identity provider.
- */
 export async function callback(
   provider: OidcProvider,
   users: UserRepository,

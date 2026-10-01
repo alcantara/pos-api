@@ -28,11 +28,6 @@ export interface AuthController {
   logout: Handler;
 }
 
-/**
- * Registered callback URL: configured when `OAUTH_REDIRECT_URI` is set,
- * otherwise derived from the request (development convenience — production
- * must configure it explicitly).
- */
 function callbackUri(request: FastifyRequest, env: Env): string {
   if (env.OAUTH_REDIRECT_URI) return env.OAUTH_REDIRECT_URI;
   const host = request.headers.host ?? "localhost";
@@ -97,8 +92,6 @@ export function createAuthController(
           secure,
         }),
       ]);
-      // Stateless sessions: the browser stores the cookie; logout just
-      // expires it. Lifetime is bounded by the signed `exp` claim.
       return reply.code(302).header("location", "/").send();
     },
 

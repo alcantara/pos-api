@@ -9,7 +9,6 @@ export interface CreateCustomerInput {
   phone?: string | null;
 }
 
-/** Input is validated at the HTTP boundary (Zod); this coordinates uniqueness. */
 export async function createCustomer(
   repository: CustomerRepository,
   input: CreateCustomerInput,

@@ -17,7 +17,6 @@ import { updateProduct } from "./update-product.js";
 
 const KNOWN_CATEGORY_ID = randomUUID();
 
-/** Category lookup fake: exactly one category exists. */
 const categories: CategoryLookup = {
   findById: (id) =>
     Promise.resolve(

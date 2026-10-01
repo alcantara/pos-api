@@ -95,7 +95,6 @@ export class PostgresCustomerRepository implements CustomerRepository {
   }
 }
 
-/** PostgreSQL `ILIKE` is case-insensitive; wildcards are escaped. */
 function buildSearchFilter(search: string | undefined): SQL | undefined {
   if (!search) return undefined;
   const pattern = containsPattern(search);

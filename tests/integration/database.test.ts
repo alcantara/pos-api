@@ -35,15 +35,10 @@ interface Ops {
   selectProduct(id: string): Promise<ProductRow | undefined>;
 }
 
-/**
- * Behavioral suite executed against every supported engine. Implementations
- * bind operations to the correct handle (steady state or transaction).
- */
 interface Harness {
   readonly name: string;
   migrate(): Promise<void>;
   ops(): Ops;
-  /** Commits when `fn` resolves, rolls back when it rejects. */
   transaction<T>(fn: (ops: Ops) => Promise<T>): Promise<T>;
   close(): Promise<void> | void;
 }
@@ -78,11 +73,6 @@ function makeProduct(overrides: Partial<ProductRow> = {}): ProductRow {
   };
 }
 
-/**
- * Drizzle wraps PostgreSQL failures in `DrizzleQueryError` ("Failed query:
- * ..."), hiding the driver message in `cause`. SQLite errors pass through.
- * Assertions must inspect the whole chain.
- */
 function errorText(error: unknown): string {
   if (error instanceof Error) {
     return `${error.message}\n${errorText(error.cause)}`;
@@ -113,7 +103,6 @@ function runDatabaseSuite(harness: Harness): void {
 
       const found = await harness.ops().selectProduct(product.id);
       expect(found).toEqual(product);
-      // Compile-time parity: both dialects must produce ProductRow.
       const typed: ProductRow | undefined = found;
       expect(typed).toBeDefined();
     });
@@ -304,8 +293,6 @@ function createPostgresHarness(url: string): Harness {
   };
 }
 
-// --- suites ----------------------------------------------------------------
-
 runDatabaseSuite(createSqliteHarness());
 
 describe("sqlite: file database migrations", () => {
@@ -367,10 +354,7 @@ describe("postgres", () => {
   const url = loadEnv().TEST_POSTGRES_URL;
 
   if (!url) {
-    it.skip("TEST_POSTGRES_URL not configured", () => {
-      // Skipped locally when no PostgreSQL test database is configured.
-      // CI always sets TEST_POSTGRES_URL (see tests/setup.ts).
-    });
+    it.skip("TEST_POSTGRES_URL not configured", () => {});
   } else {
     runDatabaseSuite(createPostgresHarness(url));
   }

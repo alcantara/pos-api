@@ -8,19 +8,6 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
-/**
- * SQLite dialect schema.
- *
- * Column names, constraints and indexes must stay in sync with
- * `postgres.ts`. Integration tests run against both dialects to catch drift.
- *
- * Conventions:
- * - ids: UUID v4 stored as TEXT
- * - money: integer minor units (cents), CHECK >= 0
- * - timestamps: epoch milliseconds (UTC) stored as INTEGER
- * - enums: TEXT + CHECK (portable across dialects)
- */
-
 const id = () => text("id").primaryKey();
 const createdAt = () => integer("created_at", { mode: "number" }).notNull();
 const updatedAt = () => integer("updated_at", { mode: "number" }).notNull();

@@ -1,10 +1,5 @@
 import { DomainError } from "../errors/domain-error.js";
 
-/**
- * A product grouping. Names are unique; products reference a category
- * optionally (`products.category_id` is `ON DELETE SET NULL`).
- * Timestamps are epoch milliseconds (UTC).
- */
 export interface Category {
   id: string;
   name: string;

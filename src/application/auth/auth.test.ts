@@ -73,7 +73,6 @@ class InMemoryUserRepository implements UserRepository {
   }
 }
 
-/** Starts a login and returns its pending cookie plus the provider request. */
 async function startLogin(provider: FakeOidcProvider) {
   const outcome = await login(provider, {
     cookieSecret: SECRET,
@@ -146,7 +145,6 @@ describe("login state", () => {
     expect(state!.state).toBe(pending.state);
     expect(state!.nonce).toBe(pending.nonce);
     expect(state!.verifier).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    // The challenge sent to the provider must be S256 of the stored verifier.
     const recomputed = createHash("sha256").update(state!.verifier).digest("base64url");
     expect(pending.codeChallenge).toBe(recomputed);
   });
@@ -214,7 +212,6 @@ describe("callback", () => {
     expect(session?.sub).toBe(outcome.user.id);
     expect(outcome.sessionMaxAge).toBeGreaterThan(0);
 
-    // The PKCE verifier and nonce travel to the provider, not the client.
     expect(provider.lastExchange?.codeVerifier).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(provider.lastExchange?.expectedNonce).toBe(provider.lastRequest?.nonce);
     expect(provider.lastExchange?.redirectUri).toBe(REDIRECT_URI);

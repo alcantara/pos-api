@@ -7,7 +7,6 @@ export interface CreateCategoryInput {
   name: string;
 }
 
-/** Input is validated at the HTTP boundary (Zod); this coordinates uniqueness. */
 export async function createCategory(
   repository: CategoryRepository,
   input: CreateCategoryInput,

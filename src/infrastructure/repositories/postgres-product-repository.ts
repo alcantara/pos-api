@@ -101,11 +101,6 @@ export class PostgresProductRepository implements ProductRepository {
   }
 }
 
-/**
- * PostgreSQL `ILIKE` is case-insensitive; wildcards in user input are
- * escaped so searches match literally, with surrounding `%` for substring
- * matching.
- */
 function buildSearchFilter(search: string | undefined): SQL | undefined {
   if (!search) return undefined;
   const pattern = containsPattern(search);

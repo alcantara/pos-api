@@ -1,7 +1,3 @@
-/**
- * Base class for business-rule violations. The HTTP layer maps `code` to an
- * error envelope and status code; unknown codes become a sanitized 500.
- */
 export abstract class DomainError extends Error {
   abstract readonly code: string;
 
@@ -27,10 +23,6 @@ export class ConflictError extends DomainError {
   }
 }
 
-/**
- * Input that passes schema validation but breaks a business rule — e.g. a
- * foreign key pointing at a row that does not exist.
- */
 export class ValidationError extends DomainError {
   readonly code = "VALIDATION_ERROR";
 
@@ -39,7 +31,6 @@ export class ValidationError extends DomainError {
   }
 }
 
-/** Missing or invalid credentials/session — maps to HTTP 401. */
 export class UnauthorizedError extends DomainError {
   readonly code = "UNAUTHORIZED";
 
@@ -48,10 +39,6 @@ export class UnauthorizedError extends DomainError {
   }
 }
 
-/**
- * Auth cannot run because configuration (OIDC credentials or cookie secret)
- * is absent — maps to HTTP 503. Auth must fail closed, never open.
- */
 export class AuthNotConfiguredError extends DomainError {
   readonly code = "AUTH_NOT_CONFIGURED";
 

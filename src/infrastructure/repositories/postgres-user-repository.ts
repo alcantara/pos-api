@@ -5,7 +5,6 @@ import type { PgContext } from "../database/postgres.js";
 import { users } from "../database/schema/postgres.js";
 import { toConflictError } from "./db-errors.js";
 
-/** The CHECK constraint guarantees these; mapped without unsafe casts. */
 function mapRow(row: typeof users.$inferSelect): User {
   const { role, ...rest } = row;
   if (role !== "ADMIN" && role !== "MANAGER" && role !== "CASHIER") {

@@ -4,12 +4,6 @@ import type { Table } from "drizzle-orm";
 import * as pgSchema from "./schema/postgres.js";
 import * as sqliteSchema from "./schema/sqlite.js";
 
-/**
- * Guards against drift between the two dialect schemas: same tables, same
- * column names. Types intentionally differ (uuid vs text ids, bigint vs
- * integer money) but row shapes are asserted to be identical by the
- * integration suite on both engines.
- */
 describe("schema parity", () => {
   const sqliteTables = Object.entries(sqliteSchema) as [string, Table][];
   const pgTables = Object.entries(pgSchema) as [string, Table][];

@@ -7,10 +7,6 @@ export interface CookieOptions {
   secure: boolean;
 }
 
-/**
- * Serializes an HttpOnly, SameSite=Lax cookie. Our cookie values are
- * base64url (`A-Z a-z 0-9 - _ .`), so no attribute escaping is needed.
- */
 export function serializeCookie(
   name: string,
   value: string,
@@ -26,12 +22,10 @@ export function serializeCookie(
   return parts.join("; ");
 }
 
-/** Expired cookie that makes browsers drop `name` on the given path. */
 export function clearCookie(name: string, options: CookieOptions): string {
   return serializeCookie(name, "", { ...options, maxAge: 0 });
 }
 
-/** Parses a request `cookie` header; first occurrence of a name wins. */
 export function parseCookies(header: string | undefined): Record<string, string> {
   const cookies: Record<string, string> = {};
   if (!header) return cookies;

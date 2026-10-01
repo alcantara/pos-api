@@ -58,7 +58,6 @@ export class PostgresCategoryRepository implements CategoryRepository {
     }
   }
 
-  /** Products keep existing: `products.category_id` is `ON DELETE SET NULL`. */
   async delete(id: string): Promise<void> {
     await this.ctx.db.delete(categories).where(eq(categories.id, id));
   }
@@ -83,7 +82,6 @@ export class PostgresCategoryRepository implements CategoryRepository {
   }
 }
 
-/** PostgreSQL `ILIKE` is case-insensitive; wildcards are escaped. */
 function buildSearchFilter(search: string | undefined): SQL | undefined {
   if (!search) return undefined;
   const pattern = containsPattern(search);

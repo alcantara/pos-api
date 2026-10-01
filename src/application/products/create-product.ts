@@ -13,10 +13,6 @@ export interface CreateProductInput {
   categoryId?: string | null;
 }
 
-/**
- * Input is validated at the HTTP boundary (Zod); this use case coordinates
- * uniqueness, the optional category reference and persistence.
- */
 export async function createProduct(
   repository: ProductRepository,
   categories: CategoryLookup,

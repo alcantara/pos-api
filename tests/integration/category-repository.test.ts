@@ -8,11 +8,6 @@ import type { CategoryRepository } from "../../src/application/ports/category-re
 import type { ProductRepository } from "../../src/application/ports/product-repository.js";
 import { ConflictError } from "../../src/domain/errors/domain-error.js";
 
-/**
- * Category repository behavior must hold on every supported engine, so this
- * suite runs against SQLite always and against PostgreSQL when
- * TEST_POSTGRES_URL is configured (always in CI — see tests/setup.ts).
- */
 function targets(): Array<{ name: string; databaseUrl: string }> {
   const env = loadEnv();
   const list = [{ name: "sqlite", databaseUrl: "file::memory:" }];
@@ -137,7 +132,6 @@ describe.each(targets())("category repository ($name)", (target) => {
       sort: "name",
       order: "asc",
     });
-    // A non-escaped pattern would match every row in the table.
     expect(wildcard.total).toBe(1);
     expect(wildcard.rows[0]?.name).toBe(`${token} 50% off`);
   });

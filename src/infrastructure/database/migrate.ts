@@ -4,11 +4,6 @@ import { resolveDialect, sqliteFilename } from "./client.js";
 import { PostgresDatabase } from "./postgres.js";
 import { SqliteDatabase } from "./sqlite.js";
 
-/**
- * Applies pending migrations for the given `DATABASE_URL`. Idempotent.
- * (`SqliteDatabase.migrate` / `PostgresDatabase.migrate` do the work on a
- * single connection — required for in-memory SQLite.)
- */
 export function runMigrations(databaseUrl: string): void | Promise<void> {
   const dialect = resolveDialect(databaseUrl);
 

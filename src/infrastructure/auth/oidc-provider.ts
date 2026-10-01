@@ -30,22 +30,12 @@ type Discovery = z.infer<typeof discoverySchema>;
 
 const tokenResponseSchema = z.object({ id_token: z.string().min(1) });
 
-/**
- * OIDC authorization-code client backed by `jose` (discovery, JWKS, ID-token
- * verification with issuer/audience/expiration checks).
- *
- * Protocol and verification failures surface as `UnauthorizedError` (401)
- * with generic messages — provider response bodies never reach API clients.
- * Discovery/network problems are not client faults and propagate as 500s.
- */
 export class RemoteOidcProvider implements OidcProvider {
   private readonly config: OidcConfig | null;
   private discovery: Promise<Discovery> | null = null;
   private jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 
   constructor(config: OidcConfig | null) {
-    // Issuer comparison is string-exact (discovery, `iss` claim); a trailing
-    // slash in configuration would otherwise never match the provider.
     this.config = config
       ? { ...config, issuer: config.issuer.replace(/\/+$/, "") }
       : null;
@@ -130,7 +120,6 @@ export class RemoteOidcProvider implements OidcProvider {
     if (!this.discovery) {
       const attempt = this.fetchDiscovery();
       this.discovery = attempt;
-      // Failed lookups are not cached — the next request retries.
       void attempt.catch(() => {
         if (this.discovery === attempt) this.discovery = null;
       });

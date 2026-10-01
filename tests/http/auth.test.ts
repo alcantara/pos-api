@@ -41,7 +41,6 @@ interface LoginJourney {
 describe("auth HTTP API", () => {
   let idp: StubIdP;
   let app: FastifyInstance;
-  /** Second app with no OAuth/cookie configuration (fail-closed checks). */
   let openApp: FastifyInstance;
 
   beforeAll(async () => {
@@ -178,8 +177,6 @@ describe("auth HTTP API", () => {
       expect(body.passwordHash).toBeUndefined();
       expect(body._links.self.href).toBe("/api/v1/auth/me");
 
-      // PKCE round trip: the verifier sent to the token endpoint hashes to
-      // the challenge that was sent to the authorization endpoint.
       const verifier = idp.lastTokenRequest.code_verifier;
       if (!verifier) throw new Error("stub received no code_verifier");
       expect(verifier).toMatch(/^[A-Za-z0-9_-]{43}$/);

@@ -5,7 +5,6 @@ import type { SqliteContext } from "../database/sqlite.js";
 import { users } from "../database/schema/sqlite.js";
 import { toConflictError } from "./db-errors.js";
 
-/** The CHECK constraint guarantees these; mapped without unsafe casts. */
 function mapRow(row: typeof users.$inferSelect): User {
   const { role, ...rest } = row;
   if (role !== "ADMIN" && role !== "MANAGER" && role !== "CASHIER") {

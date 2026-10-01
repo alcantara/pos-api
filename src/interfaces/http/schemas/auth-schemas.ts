@@ -1,10 +1,5 @@
 import { z } from "zod";
 
-/**
- * The provider controls this redirect: extra query parameters (e.g.
- * `session_state`, `iss`) are tolerated, but a callback must carry either a
- * code+state pair or an error.
- */
 export const callbackQuerySchema = z
   .object({
     code: z.string().min(1).optional(),

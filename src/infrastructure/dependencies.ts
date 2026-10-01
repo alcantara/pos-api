@@ -15,19 +15,12 @@ import { SqliteUserRepository } from "./repositories/sqlite-user-repository.js";
 
 export interface CreatedDependencies {
   dependencies: Dependencies;
-  /** Releases database connections; wired into Fastify's onClose hook. */
   close: () => Promise<void>;
-  /** Underlying handle; exposed for tests that need raw access. */
   database: SqliteDatabase | PostgresDatabase;
 }
-/**
- * Composition root: selects the dialect from `DATABASE_URL`, applies pending
- * migrations (idempotent) and builds every repository for that dialect.
- */
 export async function createDependencies(env: Env): Promise<CreatedDependencies> {
   const dialect = resolveDialect(env.DATABASE_URL);
 
-  // The env schema guarantees the three core OAuth values together.
   const oidc = new RemoteOidcProvider(
     env.OAUTH_ISSUER && env.OAUTH_CLIENT_ID && env.OAUTH_CLIENT_SECRET
       ? {

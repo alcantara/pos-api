@@ -4,11 +4,8 @@ import type { AddressInfo } from "node:net";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
 export interface StubIdP {
-  /** Issuer/base URL, e.g. `http://127.0.0.1:41234`. */
   baseUrl: string;
-  /** Mutable claims written into the next issued ID token. */
   token: { nonce: string; email: string; name: string | null };
-  /** Form parameters of the last token-endpoint call made by the app. */
   lastTokenRequest: Record<string, string>;
   close(): Promise<void>;
 }
@@ -22,11 +19,6 @@ function sendJson(response: ServerResponse, status: number, body: unknown): void
   response.end(payload);
 }
 
-/**
- * Minimal in-process OIDC provider for tests: discovery, JWKS and a token
- * endpoint that issues RS256 ID tokens. No network access required — it
- * listens on an ephemeral loopback port.
- */
 export async function startStubIdp(clientId: string): Promise<StubIdP> {
   const { publicKey, privateKey } = await generateKeyPair("RS256", {
     extractable: true,

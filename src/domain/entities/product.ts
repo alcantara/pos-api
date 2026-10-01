@@ -1,9 +1,5 @@
 import { DomainError } from "../errors/domain-error.js";
 
-/**
- * A sellable product. Monetary values are integer cents; timestamps are
- * epoch milliseconds (UTC).
- */
 export interface Product {
   id: string;
   sku: string;

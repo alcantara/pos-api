@@ -7,16 +7,6 @@ const migrationsFolder = fileURLToPath(
   new URL("../../../drizzle/sqlite", import.meta.url),
 );
 
-/**
- * Serializes database access within this process.
- *
- * better-sqlite3 is synchronous and drizzle's SQLite transactions require a
- * *synchronous* callback (the driver rejects promises: "Transaction function
- * cannot return a promise"). Our transactions run async application code, so
- * transactions are started/committed manually. While such a transaction is
- * open, any other query issued on the same connection would silently join it,
- * so every operation must pass through this queue.
- */
 class Mutex {
   private tail: Promise<unknown> = Promise.resolve();
 
@@ -30,19 +20,10 @@ class Mutex {
   }
 }
 
-/**
- * Runs a unit of database work serialized with every other unit (including
- * transactions). The callback must be async so the query executes while the
- * lock is held.
- */
 export type GuardFn = <T>(fn: () => Promise<T>) => Promise<T>;
 
 export interface SqliteContext {
   readonly db: BetterSQLite3Database;
-  /**
-   * Must be used for every query. Inside `transaction()` the guard is a
-   * passthrough because the caller already holds the mutex.
-   */
   readonly guard: GuardFn;
 }
 
@@ -64,7 +45,6 @@ export class SqliteDatabase {
     this.db = drizzle(this.client);
   }
 
-  /** Context for non-transactional access (serialized with transactions). */
   get context(): SqliteContext {
     return {
       db: this.db,
@@ -72,11 +52,6 @@ export class SqliteDatabase {
     };
   }
 
-  /**
-   * Runs `fn` inside a transaction with IMMEDIATE locking. Rolls back on any
-   * error. The context passed to `fn` must be used for all queries; using the
-   * steady-state `context` inside a transaction would deadlock on the mutex.
-   */
   async transaction<T>(fn: (ctx: SqliteContext) => Promise<T>): Promise<T> {
     return this.mutex.run(async () => {
       this.client.exec("BEGIN IMMEDIATE");
@@ -87,15 +62,12 @@ export class SqliteDatabase {
       } catch (error) {
         try {
           this.client.exec("ROLLBACK");
-        } catch {
-          // transaction already aborted by the database
-        }
+        } catch {}
         throw error;
       }
     });
   }
 
-  /** Applies pending SQLite migrations on this connection (idempotent). */
   migrate(): void {
     applyMigrations(this.db, { migrationsFolder });
   }

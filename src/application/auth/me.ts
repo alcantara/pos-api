@@ -6,11 +6,6 @@ import {
 import type { UserRepository } from "../ports/user-repository.js";
 import { verifySessionToken } from "./session.js";
 
-/**
- * Resolves the current user from a session token. Fails closed with 401 for
- * missing/invalid/expired sessions and for sessions whose user no longer
- * exists (e.g. deleted account).
- */
 export async function me(
   users: UserRepository,
   token: string | null,
