@@ -53,6 +53,10 @@ RUN apk add --no-cache python3 make g++ \
 COPY --from=builder --chown=node:node /app/dist ./dist
 COPY --chown=node:node drizzle ./drizzle
 
+# The OpenAPI document is discovered from the project root, so it must sit next
+# to package.json here. /docs stays off unless DOCS_ENABLED=true.
+COPY --chown=node:node docs/openapi.yaml ./docs/openapi.yaml
+
 # Allow the unprivileged user to create local files (e.g. SQLite db) in /app.
 RUN chown node:node /app
 

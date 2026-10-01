@@ -3,17 +3,53 @@
 The machine-readable contract lives in [`openapi.yaml`](./openapi.yaml)
 (OpenAPI 3.1). This page explains how to read it, browse it and keep it honest.
 
+Prose reference (behaviour, rules, errors): [`api.md`](./api.md).
+Task-oriented recipes: [`usage.md`](./usage.md).
+
 ## Browsing the spec
 
-### Swagger UI (interactive)
+### Served by the application (interactive)
 
-Any static server works:
+The API serves its own Swagger UI — no static server, no internet access, no CDN:
+
+| Route           | Serves                                           |
+| --------------- | ------------------------------------------------ |
+| `/docs`         | Swagger UI with "Try it out" against this host   |
+| `/docs/json`    | the document as JSON                             |
+| `/docs/yaml`    | the document as YAML                             |
+| `/docs/static/` | UI assets bundled with the server (offline-safe) |
+
+```bash
+pnpm dev
+# → http://localhost:3000/docs
+```
+
+The served bytes are the very file this repository validates, so the UI can never
+advertise an API that differs from the one running.
+
+**Availability.** `/docs` is served outside production by default and disabled
+in production, because an exposed contract is reconnaissance for whoever is
+probing the API. Override explicitly when you want it:
+
+| Variable            | Default                     | Effect                                   |
+| ------------------- | --------------------------- | ---------------------------------------- |
+| `DOCS_ENABLED`      | `true` except in production | `false` disables `/docs`; `true` enables |
+| `OPENAPI_DOCS_PATH` | `<root>/docs/openapi.yaml`  | absolute path to the document to serve   |
+
+Discovery walks up from the running module to the project root, so it works from
+`src/` (tsc/tsx) and from `dist/` (built image) without a per-layout path. A
+container that mounts the contract elsewhere points `OPENAPI_DOCS_PATH` at it.
+
+In the Docker image only `docs/openapi.yaml` is shipped next to `package.json`;
+the rest of `docs/` stays in the repository.
+
+### Without the server (static tools)
 
 ```bash
 pnpm dlx serve docs          # or: python3 -m http.server -d docs 8080
 ```
 
-Then open the Swagger UI pointed at the file:
+Then point an external viewer at the file:
 
 - <https://editor.swagger.io/> — drop the file or paste its URL
 - Redoc: <https://redocly.github.io/redoc/>
@@ -75,7 +111,11 @@ disagree. It asserts that:
 - session routes document `401`, item lookups `404`, role-gated and CSRF writes
   `403`, and read collections `429`.
 
-Run it with `pnpm test:docs`.
+`tests/http/docs.test.ts` covers the served surface: that `/docs`, `/docs/json`
+and `/docs/yaml` return the document, that the UI assets are local (no CDN), and
+that `DOCS_ENABLED` gates the routes in both directions.
+
+Run them with `pnpm test:docs` and `pnpm test:e2e`.
 
 Adding a route means adding it to the spec in the same change — the test is the
 reminder.
@@ -94,8 +134,9 @@ reminder.
 
 ## Known gaps
 
-- The spec documents implemented behaviour only. `audit log` and `OpenAPI
-generation from the Zod schemas` are still pending, so the document is
-  hand-maintained.
+- The document is hand-maintained. Deriving it from the Zod schemas — which would
+  remove the manual step entirely — is still pending; until then the sync test in
+  `tests/docs/openapi.test.ts` is the guard.
+- The spec documents implemented behaviour only. `audit log` is pending.
 - `GET /health` is served at the root, outside `/api/v1`, so it is documented in
   [`api.md`](./api.md) rather than here.

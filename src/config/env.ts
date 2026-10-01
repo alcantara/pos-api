@@ -35,6 +35,15 @@ const envSchema = z
         message: "must be a comma-separated list of origins",
       }),
     ),
+    // No `.default()` here: an inner default would be applied to an empty string by
+    // `unsetIfEmpty`, so `DOCS_ENABLED=` would silently mean "true" instead of
+    // "unset". `toSecurityConfig` resolves the environment-aware default instead.
+    DOCS_ENABLED: unsetIfEmpty(
+      z.enum(["true", "false"]).transform((value) => value === "true"),
+    ),
+    // Explicit location of the OpenAPI document. Unset, it is discovered from
+    // the project root; set, a container can point at a mounted contract.
+    OPENAPI_DOCS_PATH: unsetIfEmpty(z.string().min(1)),
     CSRF_PROTECTION: z
       .enum(["strict", "true", "false"])
       .default("strict")

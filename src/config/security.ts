@@ -6,6 +6,7 @@ export interface SecurityConfig {
   corsOrigins: string[] | null;
   csrfProtection: boolean;
   hsts: boolean;
+  docsEnabled: boolean;
 }
 
 const CSV_PATTERN = /^[^,\s]+(\s*,\s*[^,\s]+)*$/;
@@ -21,6 +22,9 @@ export function toSecurityConfig(env: Env): SecurityConfig {
       : null,
     csrfProtection: env.CSRF_PROTECTION,
     hsts: env.NODE_ENV === "production",
+    // Off in production by default: an exposed contract is reconnaissance for
+    // whoever is probing the API. Elsewhere it is on unless explicitly disabled.
+    docsEnabled: env.DOCS_ENABLED ?? env.NODE_ENV !== "production",
   };
 }
 

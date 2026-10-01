@@ -7,6 +7,63 @@ Base URL: `/api/v1`. All responses are JSON except redirects. Timestamps are
 RFC 3339 (ISO 8601) strings derived from epoch-millisecond integers; money is
 integer cents (`priceCents`, `totalCents`).
 
+## Endpoint index
+
+Base path `/api/v1`. "any" means any authenticated role (`CASHIER`, `MANAGER`,
+`ADMIN`); "manage" means `ADMIN` or `MANAGER`. Full request/response shapes live
+in [`openapi.yaml`](./openapi.yaml).
+
+| #   | Method   | Path                     | Roles  | Success | Errors                       |
+| --- | -------- | ------------------------ | ------ | ------- | ---------------------------- |
+| 1   | `GET`    | `/auth/login`            | public | 302     | 503                          |
+| 2   | `GET`    | `/auth/callback`         | public | 302     | 400, 401                     |
+| 3   | `GET`    | `/auth/me`               | any    | 200     | 401, 503                     |
+| 4   | `POST`   | `/auth/logout`           | any    | 204     | 401, 403                     |
+| 5   | `GET`    | `/categories`            | any    | 200     | 401, 403, 429                |
+| 6   | `POST`   | `/categories`            | manage | 201     | 400, 401, 403, 409, 429      |
+| 7   | `GET`    | `/categories/{id}`       | any    | 200     | 401, 404                     |
+| 8   | `PATCH`  | `/categories/{id}`       | manage | 200     | 400, 401, 403, 404, 409      |
+| 9   | `DELETE` | `/categories/{id}`       | manage | 204     | 401, 403, 404                |
+| 10  | `GET`    | `/products`              | any    | 200     | 401, 429                     |
+| 11  | `POST`   | `/products`              | manage | 201     | 400, 401, 403, 409, 429      |
+| 12  | `GET`    | `/products/{id}`         | any    | 200     | 401, 404                     |
+| 13  | `PATCH`  | `/products/{id}`         | manage | 200     | 400, 401, 403, 404, 409      |
+| 14  | `DELETE` | `/products/{id}`         | manage | 204     | 401, 403, 404, 409           |
+| 15  | `GET`    | `/customers`             | any    | 200     | 401                          |
+| 16  | `POST`   | `/customers`             | manage | 201     | 400, 401, 403, 409           |
+| 17  | `GET`    | `/customers/{id}`        | any    | 200     | 401, 404                     |
+| 18  | `PATCH`  | `/customers/{id}`        | manage | 200     | 400, 401, 403, 404, 409      |
+| 19  | `DELETE` | `/customers/{id}`        | manage | 204     | 401, 403, 404, 409           |
+| 20  | `GET`    | `/sales`                 | any    | 200     | 400, 401                     |
+| 21  | `POST`   | `/sales`                 | any    | 201     | 400, 401, 403, 404, 409, 413 |
+| 22  | `GET`    | `/sales/{id}`            | any    | 200     | 401, 404                     |
+| 23  | `POST`   | `/sales/{id}/cancel`     | manage | 200     | 401, 403, 404, 409           |
+| 24  | `GET`    | `/inventory/movements`   | any    | 200     | 400, 401                     |
+| 25  | `POST`   | `/inventory/adjustments` | manage | 201     | 400, 401, 403, 404, 409      |
+
+Two routes sit outside `/api/v1`:
+
+| Method | Path      | Auth   | Purpose                                       |
+| ------ | --------- | ------ | --------------------------------------------- |
+| `GET`  | `/health` | public | liveness probe; exempt from rate limiting     |
+| `GET`  | `/docs`   | public | Swagger UI (see [`openapi.md`](./openapi.md)) |
+
+Every non-2xx response is one of the codes in the [error envelope](#error-envelope).
+`POST /sales` also answers `200` when an idempotency key is replayed.
+
+## Request conventions
+
+Every request accepts `Accept: application/json`. Writes additionally need:
+
+| Header            | When                                     | Failure             |
+| ----------------- | ---------------------------------------- | ------------------- |
+| `x-csrf-token`    | cookie-authenticated `POST/PATCH/DELETE` | 403                 |
+| `idempotency-key` | optional on `POST /sales`                | 400 if malformed    |
+| `content-type`    | requests with a body                     | 415 if absent/wrong |
+
+Reads are plain `GET` with optional query parameters. IDs are UUIDs in path
+segments and bodies.
+
 ## Error envelope
 
 Every non-2xx response uses the same shape:
@@ -32,6 +89,8 @@ to `INTERNAL_ERROR` / `Internal server error`.
 | `NOT_FOUND`, `PRODUCT_NOT_FOUND`, `CATEGORY_NOT_FOUND`, `CUSTOMER_NOT_FOUND`, `SALE_NOT_FOUND` | 404  |
 | `CONFLICT`, `INSUFFICIENT_STOCK`                                                               | 409  |
 | `RATE_LIMITED`                                                                                 | 429  |
+| `BAD_REQUEST` on a body larger than 1 MiB                                                      | 413  |
+| `BAD_REQUEST` on a missing or non-JSON `content-type`                                          | 415  |
 | `AUTH_NOT_CONFIGURED`                                                                          | 503  |
 | `INTERNAL_ERROR`                                                                               | 500  |
 
@@ -162,6 +221,194 @@ or a manual adjustment.
 `GET /inventory/movements` accepts `productId`, `type` (`SALE`, `PURCHASE`,
 `ADJUSTMENT`, `RETURN`, `CANCELLATION`), `sort` (`createdAt` \| `quantity`) and
 `order` (default `desc`).
+
+## Worked examples
+
+The API authenticates with a cookie, so a terminal client sends cookies rather
+than a bearer token.
+
+### 1. Start the server and mint a local session
+
+```bash
+cp .env.example .env       # see docs/development.md for the full list
+pnpm db:migrate
+pnpm db:seed               # admin@pos.local, manager@pos.local, cashier@pos.local
+pnpm dev
+```
+
+A real session comes from the OIDC redirect flow, which a terminal cannot
+complete. To exercise writes locally, mint a session plus a CSRF token for a
+seeded user (needs `pnpm build` and the server's own `COOKIE_SECRET`):
+
+```bash
+export BASE=http://localhost:3000/api/v1
+export USER_ID=$(sqlite3 dev.db "select id from users where email='admin@pos.local'")
+
+read -r SESSION CSRF <<<"$(node --input-type=module -e "
+  import { createSessionToken } from './dist/application/auth/session.js';
+  import { csrfToken } from './dist/interfaces/http/cookies.js';
+  process.stdout.write(createSessionToken(process.argv[1], process.env.COOKIE_SECRET) + ' ' + csrfToken());
+" "$USER_ID")"
+```
+
+Wrap `curl` so every example carries the session, the CSRF cookie and the
+matching `x-csrf-token` header:
+
+```bash
+pos() {
+  curl -sS -b "pos_session=$SESSION; pos_csrf=$CSRF" \
+    -H "x-csrf-token: $CSRF" "$@"
+}
+```
+
+```bash
+pos "$BASE/auth/me"
+# {"id":"…","email":"admin@pos.local","name":"…","role":"ADMIN", …}
+```
+
+In a browser the jar handles this for you: the server sets `pos_session` and
+`pos_csrf` on `/auth/callback`, and a write is `403 FORBIDDEN` unless the
+`x-csrf-token` header equals the `pos_csrf` cookie.
+
+### 2. Create a category and a product
+
+```bash
+pos -X POST "$BASE/categories" -H "content-type: application/json" \
+  -d '{"name":"Bebidas"}'
+# 201, Location: /api/v1/categories/<uuid>
+
+pos -X POST "$BASE/products" -H "content-type: application/json" \
+  -d '{"sku":"COCA-350","name":"Coca-Cola 350ml","priceCents":599,
+       "stockQuantity":120,"categoryId":"<uuid>"}'
+# 201
+```
+
+```json
+{
+  "id": "9f1c…",
+  "sku": "COCA-350",
+  "name": "Coca-Cola 350ml",
+  "description": null,
+  "priceCents": 599,
+  "stockQuantity": 120,
+  "categoryId": "3b2a…",
+  "createdAt": "2026-03-01T12:00:00.000Z",
+  "updatedAt": "2026-03-01T12:00:00.000Z",
+  "_links": {
+    "self": { "href": "/api/v1/products/9f1c…" },
+    "update": { "href": "/api/v1/products/9f1c…", "method": "PATCH" },
+    "delete": { "href": "/api/v1/products/9f1c…", "method": "DELETE" }
+  }
+}
+```
+
+Money is integer cents: `599` is 5,99. Floats are rejected with `400`.
+
+### 3. Search, sort, paginate
+
+```bash
+pos -G "$BASE/products" \
+  --data-urlencode "search=coca" \
+  --data-urlencode "sort=price" --data-urlencode "order=asc" \
+  --data-urlencode "limit=10"
+```
+
+```json
+{
+  "data": [],
+  "pagination": { "page": 1, "limit": 10, "total": 1, "totalPages": 1 },
+  "_links": { "next": { "href": "/api/v1/products?limit=10&page=2" } }
+}
+```
+
+Follow `_links.next` instead of counting pages; it disappears on the last page,
+and `_links.prev` is absent on the first.
+
+### 4. Register a sale
+
+```bash
+pos -X POST "$BASE/sales" -H "content-type: application/json" \
+  -H "idempotency-key: till-3-2026-03-01-0001" \
+  -d '{"customerId":"<uuid>","items":[{"productId":"<uuid>","quantity":2}]}'
+# 201, Location: /api/v1/sales/<uuid>
+```
+
+```json
+{
+  "id": "5e7a…",
+  "customerId": "1a2b…",
+  "userId": "9c8d…",
+  "status": "COMPLETED",
+  "totalCents": 1198,
+  "itemCount": 1,
+  "createdAt": "2026-03-01T12:05:00.000Z",
+  "updatedAt": "2026-03-01T12:05:00.000Z",
+  "items": [
+    {
+      "id": "7d8e…",
+      "productId": "9f1c…",
+      "quantity": 2,
+      "unitPriceCents": 599,
+      "subtotalCents": 1198
+    }
+  ],
+  "_links": {
+    "self": { "href": "/api/v1/sales/5e7a…" },
+    "cancel": { "href": "/api/v1/sales/5e7a…/cancel", "method": "POST" }
+  }
+}
+```
+
+Send the exact same request again with the same `idempotency-key` and you get
+`200` plus `Idempotent-Replayed: true` and the original sale — never a second
+charge. Same key with a different body is `409 CONFLICT`.
+
+### 5. Cancel a sale
+
+```bash
+pos -X POST "$BASE/sales/5e7a…/cancel"
+# 200 — status becomes CANCELLED, stock is restored, a CANCELLATION movement is
+# appended to the ledger, and the `cancel` link is withdrawn.
+```
+
+### 6. Adjust stock and read the ledger
+
+```bash
+pos -X POST "$BASE/inventory/adjustments" -H "content-type: application/json" \
+  -d '{"productId":"<uuid>","quantity":-3,"type":"ADJUSTMENT","reason":"Danos"}'
+# 201
+
+pos -G "$BASE/inventory/movements" \
+  --data-urlencode "productId=<uuid>" --data-urlencode "type=SALE"
+```
+
+Positive `quantity` adds stock, negative removes it. Removing more than is on
+hand is `409 INSUFFICIENT_STOCK` and writes nothing.
+
+### 7. Read a validation failure
+
+```bash
+pos -X POST "$BASE/products" -H "content-type: application/json" \
+  -d '{"sku":"","name":"Sem preço"}'
+```
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "details": [
+      { "path": "sku", "message": "Too small: expected string to have >=1 characters" },
+      {
+        "path": "priceCents",
+        "message": "Invalid input: expected number, received undefined"
+      }
+    ]
+  }
+}
+```
+
+`details[].path` is the offending field, so a form can highlight it directly.
 
 ## Authorization
 

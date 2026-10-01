@@ -24,6 +24,7 @@ describe("hardening configuration", () => {
       corsOrigins: null,
       csrfProtection: true,
       hsts: false,
+      docsEnabled: true,
     });
   });
 
@@ -46,6 +47,28 @@ describe("hardening configuration", () => {
   it("only enables HSTS in production", () => {
     expect(securityFrom({ NODE_ENV: "production" }).hsts).toBe(true);
     expect(securityFrom({ NODE_ENV: "development" }).hsts).toBe(false);
+  });
+
+  it("hides the documentation in production unless asked for it", () => {
+    // An exposed contract is reconnaissance for whoever is probing the API.
+    expect(securityFrom({ NODE_ENV: "production" }).docsEnabled).toBe(false);
+    expect(
+      securityFrom({ NODE_ENV: "production", DOCS_ENABLED: "true" }).docsEnabled,
+    ).toBe(true);
+  });
+
+  it("lets DOCS_ENABLED override the default outside production", () => {
+    expect(securityFrom({ NODE_ENV: "test" }).docsEnabled).toBe(true);
+    expect(securityFrom({ NODE_ENV: "test", DOCS_ENABLED: "false" }).docsEnabled).toBe(
+      false,
+    );
+  });
+
+  it("treats an empty DOCS_ENABLED as unset", () => {
+    expect(securityFrom({ NODE_ENV: "production", DOCS_ENABLED: "" }).docsEnabled).toBe(
+      false,
+    );
+    expect(securityFrom({ NODE_ENV: "test", DOCS_ENABLED: "" }).docsEnabled).toBe(true);
   });
 
   it.each([

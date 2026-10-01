@@ -25,6 +25,7 @@ Implemented:
 - REST + HATEOAS, offset pagination (max 100), consistent error envelope
 - SQLite and PostgreSQL selected through `DATABASE_URL`, identical behavior on both
 - Zod input validation at the HTTP boundary, sanitized errors, `/health`
+- OpenAPI 3.1 contract served as Swagger UI at `/docs` (JSON at `/docs/json`)
 - Role-based authorization (ADMIN / MANAGER / CASHIER) via `requireRole` guards
 - Hardening — rate limiting, security headers, explicit CORS allowlist, CSRF
 - Structured logging (pino) with request IDs
@@ -33,20 +34,27 @@ Implemented:
 Planned:
 
 - Audit log for sensitive operations
-- OpenAPI specification
+- Deriving the OpenAPI document from the Zod schemas
 
 ## Tech stack
 
 TypeScript · Node.js · Fastify · Drizzle ORM · SQLite · PostgreSQL · Zod · Vitest · pnpm · ESLint · Prettier · Husky · Docker · Docker Compose · GitHub Actions
 
-## Quick links
+## Documentation
 
-- [Architecture](docs/architecture.md)
-- [Security](docs/security.md)
-- [Database](docs/database.md)
-- [Development](docs/development.md)
-- [API](docs/api.md)
-- [OpenAPI reference](docs/openapi.md)
+| Document                             | Covers                                                 |
+| ------------------------------------ | ------------------------------------------------------ |
+| [API](docs/api.md)                   | endpoint index, conventions, rules, errors, examples   |
+| [Usage](docs/usage.md)               | end-to-end flows: till, sale, retry, restock, admin    |
+| [OpenAPI reference](docs/openapi.md) | the served `/docs`, spec validation, keeping it honest |
+| [Architecture](docs/architecture.md) | layers and boundaries                                  |
+| [Security](docs/security.md)         | auth, RBAC, CSRF, rate limiting, headers               |
+| [Database](docs/database.md)         | schema, migrations, dual-dialect support               |
+| [Development](docs/development.md)   | local setup, scripts, tests, CI                        |
+
+With the server running, the interactive reference is at
+<http://localhost:3000/docs> and the raw contract at
+<http://localhost:3000/docs/json>.
 
 ## Phases
 

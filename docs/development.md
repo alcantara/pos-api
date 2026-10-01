@@ -21,6 +21,8 @@ pnpm dev
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` | Requests per window per IP (120 / 60000)                 |
 | `CORS_ORIGINS`                            | Comma-separated allowlist; unset emits no CORS headers   |
 | `CSRF_PROTECTION`                         | `true` \| `false` for the double-submit check (on)       |
+| `DOCS_ENABLED`                            | serve Swagger UI at `/docs` (on, except in production)   |
+| `OPENAPI_DOCS_PATH`                       | absolute path to the document; discovered otherwise      |
 
 ## Running
 
@@ -30,7 +32,7 @@ pnpm dev
 - `pnpm test` — all tests
 - `pnpm test:unit` / `pnpm test:integration` / `pnpm test:e2e` — per level
 - `pnpm test:spec` — validate `docs/openapi.yaml`
-- `pnpm test:docs` — spec/route agreement
+- `pnpm test:docs` — spec/route agreement and the served `/docs` surface
 - `pnpm lint` / `pnpm typecheck` — code quality
 
 ## Docker
@@ -84,13 +86,15 @@ Husky + lint-staged:
 - pre-commit → lint-staged
 - pre-push → typecheck + tests
 
-## Docker
+## The image
 
 ```bash
 docker compose up --build
 ```
 
-Multi-stage build, non-root user, no secrets baked in.
+Multi-stage build, non-root user, no secrets baked in. The runtime stage ships
+`dist/`, `drizzle/` and `docs/openapi.yaml`, so the interactive documentation is
+available in the image too — off unless `DOCS_ENABLED=true`.
 
 ## CI/CD
 

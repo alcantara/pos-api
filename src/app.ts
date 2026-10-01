@@ -10,6 +10,7 @@ import {
   registerErrorHandling,
   registerRateLimit,
 } from "./interfaces/http/errors.js";
+import { registerDocs } from "./interfaces/http/docs.js";
 import { API_PREFIX } from "./interfaces/http/hateoas.js";
 import { registerAuthRoutes } from "./interfaces/http/routes/auth-routes.js";
 import { registerCategoryRoutes } from "./interfaces/http/routes/category-routes.js";
@@ -63,6 +64,10 @@ export async function buildApp(
   const requireRole = createRoleGuard(dependencies, env.COOKIE_SECRET ?? "");
 
   app.get("/health", () => ({ status: "ok" }));
+
+  if (security.docsEnabled) {
+    await registerDocs(app, { specPath: env.OPENAPI_DOCS_PATH });
+  }
 
   await app.register(
     (api) => {
