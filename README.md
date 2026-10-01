@@ -6,25 +6,32 @@ Production-quality REST API for a Point of Sale (POS) system, built with
 ## What it is
 
 Greenfield portfolio project demonstrating professional backend engineering:
-clean architecture, OAuth 2.0 / OpenID Connect authentication, RBAC,
-transactional sales, inventory concurrency safety, and test coverage against
-both SQLite and PostgreSQL.
+clean architecture, OAuth 2.0 / OpenID Connect authentication, dual-dialect
+database support, and a three-tier test suite covering SQLite and PostgreSQL.
+It is built phase by phase according to the roadmap below.
 
 ## Features
 
-- Products, categories, customers, sales, inventory
-- OAuth 2.0 / OIDC login flow with role-based authorization (ADMIN / MANAGER / CASHIER)
-- Transactional sale creation with stock validation and inventory movements
-- Sale cancellation with stock restoration
-- REST + HATEOAS, offset pagination, filtering, sorting
+Implemented:
+
+- Products, categories and customers — CRUD, search, sorting, pagination
+- OAuth 2.0 / OIDC login flow (PKCE, state, nonce) with stateless signed sessions
+- REST + HATEOAS, offset pagination (max 100), consistent error envelope
 - SQLite and PostgreSQL selected through `DATABASE_URL`
-- Zod input validation, consistent error envelope, health/readiness endpoints
-- Structured logging with request IDs, rate limiting, security headers, CORS
-- Docker, Docker Compose, GitHub Actions, OpenAPI
+- Zod input validation at the HTTP boundary, sanitized errors, `/health`
+- Structured logging (pino) with request IDs
+- Docker, Docker Compose, GitHub Actions CI, three-tier Vitest suite
+
+Planned (Phases 7–15):
+
+- RBAC route guards (ADMIN / MANAGER / CASHIER) and seeded users
+- Transactional sales with stock validation, inventory movements
+- Rate limiting, security headers, CORS, CSRF protection
+- OpenAPI specification and deployment pipeline
 
 ## Tech stack
 
-TypeScript · Node.js · Fastify · Drizzle ORM · SQLite · PostgreSQL · Zod · Vitest · pnpm · ESLint · Prettier · Husky · Docker · Docker Compose · GitHub Actions · OpenAPI
+TypeScript · Node.js · Fastify · Drizzle ORM · SQLite · PostgreSQL · Zod · Vitest · pnpm · ESLint · Prettier · Husky · Docker · Docker Compose · GitHub Actions
 
 ## Quick links
 
