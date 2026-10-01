@@ -59,4 +59,9 @@ Multi-stage build, non-root user, no secrets baked in.
 GitHub Actions (`.github/workflows/ci.yml`) runs: install, format check,
 lint, typecheck, unit tests, e2e tests, integration tests (SQLite +
 PostgreSQL service), build, dependency audit, and a Docker image build.
-Deployment (Phase 14) is not configured yet.
+
+Pushing a `v*` tag triggers `.github/workflows/release.yml`, which publishes
+the image to GitHub Container Registry as `ghcr.io/<owner>/<repo>:<tag>` plus
+a `sha-<short>` tag, then starts the image and waits for `/health` as a smoke
+test. The image steps of both workflows are unverified on this host: container
+egress does not work here, so they are validated on the GitHub runner.
