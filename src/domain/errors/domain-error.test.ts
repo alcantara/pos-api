@@ -3,6 +3,7 @@ import {
   AuthNotConfiguredError,
   ConflictError,
   DomainError,
+  ForbiddenError,
   NotFoundError,
   UnauthorizedError,
   ValidationError,
@@ -50,6 +51,21 @@ describe("UnauthorizedError", () => {
 
     expect(error.code).toBe("UNAUTHORIZED");
     expect(error.message).toBe("Authentication required");
+  });
+});
+
+describe("ForbiddenError", () => {
+  it("exposes its default message", () => {
+    const error = new ForbiddenError();
+
+    expect(error.code).toBe("FORBIDDEN");
+    expect(error.message).toBe("Insufficient permissions");
+  });
+
+  it("accepts a specific message", () => {
+    expect(new ForbiddenError("Role CASHIER cannot manage products").message).toBe(
+      "Role CASHIER cannot manage products",
+    );
   });
 });
 

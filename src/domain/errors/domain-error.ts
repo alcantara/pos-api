@@ -39,6 +39,14 @@ export class UnauthorizedError extends DomainError {
   }
 }
 
+export class ForbiddenError extends DomainError {
+  readonly code = "FORBIDDEN";
+
+  constructor(message = "Insufficient permissions") {
+    super(message);
+  }
+}
+
 export class AuthNotConfiguredError extends DomainError {
   readonly code = "AUTH_NOT_CONFIGURED";
 
