@@ -55,9 +55,7 @@ class InMemoryCustomerRepository implements CustomerRepository {
       );
     }
     rows.sort((a, b) =>
-      params.sort === "name"
-        ? a.name.localeCompare(b.name)
-        : a.createdAt - b.createdAt,
+      params.sort === "name" ? a.name.localeCompare(b.name) : a.createdAt - b.createdAt,
     );
     if (params.order === "desc") rows.reverse();
     const total = rows.length;
@@ -172,12 +170,8 @@ describe("listCustomers", () => {
 
   it("searches name, email and phone", async () => {
     const repository = new InMemoryCustomerRepository();
-    await repository.insert(
-      makeCustomer({ name: "Ana", email: "ana@example.com" }),
-    );
-    await repository.insert(
-      makeCustomer({ name: "Bruno", phone: "+5511888880000" }),
-    );
+    await repository.insert(makeCustomer({ name: "Ana", email: "ana@example.com" }));
+    await repository.insert(makeCustomer({ name: "Bruno", phone: "+5511888880000" }));
     await repository.insert(makeCustomer({ name: "Carla" }));
 
     const byEmail = await listCustomers(repository, {
@@ -271,8 +265,8 @@ describe("deleteCustomer", () => {
 
   it("throws CUSTOMER_NOT_FOUND for a missing customer", async () => {
     const repository = new InMemoryCustomerRepository();
-    await expect(
-      deleteCustomer(repository, randomUUID()),
-    ).rejects.toBeInstanceOf(CustomerNotFoundError);
+    await expect(deleteCustomer(repository, randomUUID())).rejects.toBeInstanceOf(
+      CustomerNotFoundError,
+    );
   });
 });

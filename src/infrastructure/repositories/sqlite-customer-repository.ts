@@ -22,11 +22,7 @@ export class SqliteCustomerRepository implements CustomerRepository {
 
   async findByEmail(email: string): Promise<Customer | null> {
     const rows = await this.ctx.guard(async () =>
-      this.ctx.db
-        .select()
-        .from(customers)
-        .where(eq(customers.email, email))
-        .limit(1),
+      this.ctx.db.select().from(customers).where(eq(customers.email, email)).limit(1),
     );
     return rows[0] ?? null;
   }
@@ -75,8 +71,7 @@ export class SqliteCustomerRepository implements CustomerRepository {
     } catch (error) {
       throw (
         toConflictError(error, {
-          foreignKey:
-            "The customer cannot be deleted while sales reference them",
+          foreignKey: "The customer cannot be deleted while sales reference them",
         }) ?? error
       );
     }

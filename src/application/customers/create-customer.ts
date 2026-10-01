@@ -18,9 +18,7 @@ export async function createCustomer(
   if (email) {
     const existing = await repository.findByEmail(email);
     if (existing) {
-      throw new ConflictError(
-        `A customer with email "${email}" already exists`,
-      );
+      throw new ConflictError(`A customer with email "${email}" already exists`);
     }
   }
 

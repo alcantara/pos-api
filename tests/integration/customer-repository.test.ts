@@ -86,10 +86,7 @@ async function insertSale(
   return { userId, saleId };
 }
 
-async function deleteSale(
-  database: AnyDatabase,
-  fixture: SaleFixture,
-): Promise<void> {
+async function deleteSale(database: AnyDatabase, fixture: SaleFixture): Promise<void> {
   if (database instanceof SqliteDatabase) {
     await database.context.guard(async () => {
       await database.context.db
@@ -166,9 +163,9 @@ describe.each(targets())("customer repository ($name)", (target) => {
     const email = `${randomUUID()}@example.com`;
     await customers.insert(track(makeCustomer({ email })));
 
-    await expect(
-      customers.insert(makeCustomer({ email })),
-    ).rejects.toBeInstanceOf(ConflictError);
+    await expect(customers.insert(makeCustomer({ email }))).rejects.toBeInstanceOf(
+      ConflictError,
+    );
   });
 
   it("paginates, sorts and computes total", async () => {
@@ -273,9 +270,7 @@ describe.each(targets())("customer repository ($name)", (target) => {
     await customers.insert(customer);
     saleFixtures.push(await insertSale(created.database, customer.id));
 
-    await expect(customers.delete(customer.id)).rejects.toBeInstanceOf(
-      ConflictError,
-    );
+    await expect(customers.delete(customer.id)).rejects.toBeInstanceOf(ConflictError);
     expect(await customers.findById(customer.id)).not.toBeNull();
   });
 });

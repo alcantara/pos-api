@@ -69,8 +69,7 @@ export class PostgresCustomerRepository implements CustomerRepository {
     } catch (error) {
       throw (
         toConflictError(error, {
-          foreignKey:
-            "The customer cannot be deleted while sales reference them",
+          foreignKey: "The customer cannot be deleted while sales reference them",
         }) ?? error
       );
     }
