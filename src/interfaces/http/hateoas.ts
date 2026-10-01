@@ -42,6 +42,15 @@ export function productLinks(id: string): Links {
   };
 }
 
+export function saleLinks(id: string, status: string): Links {
+  const href = `${API_PREFIX}/sales/${id}`;
+  const links: Links = { self: { href } };
+  if (status === "COMPLETED") {
+    links.cancel = { href: `${href}/cancel`, method: "POST" };
+  }
+  return links;
+}
+
 export function withPage(url: string, page: number): string {
   const parsed = new URL(url, "http://placeholder.invalid");
   parsed.searchParams.set("page", String(page));

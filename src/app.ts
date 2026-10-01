@@ -9,6 +9,7 @@ import { registerAuthRoutes } from "./interfaces/http/routes/auth-routes.js";
 import { registerCategoryRoutes } from "./interfaces/http/routes/category-routes.js";
 import { registerCustomerRoutes } from "./interfaces/http/routes/customer-routes.js";
 import { registerProductRoutes } from "./interfaces/http/routes/product-routes.js";
+import { registerSaleRoutes } from "./interfaces/http/routes/sale-routes.js";
 
 export async function buildApp(
   env: Env,
@@ -38,6 +39,7 @@ export async function buildApp(
       registerProductRoutes(api, dependencies, requireRole);
       registerCategoryRoutes(api, dependencies, requireRole);
       registerCustomerRoutes(api, dependencies, requireRole);
+      registerSaleRoutes(api, dependencies, requireRole, env);
       registerAuthRoutes(api, dependencies, env);
     },
     { prefix: API_PREFIX },

@@ -1,11 +1,20 @@
 import type { FastifyRequest, preHandlerHookHandler } from "fastify";
 import { me } from "../../application/auth/me.js";
 import type { Dependencies } from "../../application/dependencies.js";
-import type { Role } from "../../domain/entities/user.js";
+import type { Role, User } from "../../domain/entities/user.js";
 import { ForbiddenError } from "../../domain/errors/domain-error.js";
 import { parseCookies, SESSION_COOKIE } from "./cookies.js";
 
 export type RoleGuard = (...roles: Role[]) => preHandlerHookHandler;
+
+export async function resolveCurrentUser(
+  request: FastifyRequest,
+  dependencies: Dependencies,
+  cookieSecret: string,
+): Promise<User> {
+  const token = parseCookies(request.headers.cookie)[SESSION_COOKIE] ?? null;
+  return me(dependencies.users, token, cookieSecret);
+}
 
 export function createRoleGuard(
   dependencies: Dependencies,
@@ -13,8 +22,7 @@ export function createRoleGuard(
 ): RoleGuard {
   return (...roles: Role[]) =>
     async (request: FastifyRequest) => {
-      const token = parseCookies(request.headers.cookie)[SESSION_COOKIE] ?? null;
-      const user = await me(dependencies.users, token, cookieSecret);
+      const user = await resolveCurrentUser(request, dependencies, cookieSecret);
 
       if (roles.length > 0 && !roles.includes(user.role)) {
         throw new ForbiddenError(`Role ${user.role} cannot perform this operation`);
