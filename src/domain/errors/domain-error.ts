@@ -26,3 +26,15 @@ export class ConflictError extends DomainError {
     super(message);
   }
 }
+
+/**
+ * Input that passes schema validation but breaks a business rule — e.g. a
+ * foreign key pointing at a row that does not exist.
+ */
+export class ValidationError extends DomainError {
+  readonly code = "VALIDATION_ERROR";
+
+  constructor(message = "Validation failed") {
+    super(message);
+  }
+}
