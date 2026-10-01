@@ -5,7 +5,7 @@
 > fail-closed configuration, sanitized error responses, parameterized queries,
 > `requireRole` guards on every resource route, per-IP rate limiting, security
 > headers, an explicit CORS allowlist and double-submit CSRF protection.
-> Pending: audit log, idempotency keys on `POST /sales`.
+> Pending: audit log.
 
 ## Authentication
 
@@ -76,6 +76,8 @@ seed never overwrites a role changed afterwards.
 - Privilege escalation — tested via authz tests for each role boundary
 - Price tampering — sale lines are priced from the database inside the sale
   transaction; the API rejects client-supplied prices (strict schemas)
-- Duplicate requests — idempotency keys on POST /sales (pending)
+- Duplicate requests — `POST /sales` accepts an `Idempotency-Key`, claimed in the
+  same transaction as the sale (unique index on `(user_id, key)`), so a retry or
+  a duplicate delivery replays the original sale instead of charging twice
 - Negative inventory — `SELECT … FOR UPDATE` on PostgreSQL, `BEGIN IMMEDIATE` on
   SQLite, plus `CHECK (stock_quantity >= 0)`; concurrent sales cannot oversell

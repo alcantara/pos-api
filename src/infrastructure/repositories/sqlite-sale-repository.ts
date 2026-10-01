@@ -17,6 +17,8 @@ import type {
   SaleStatus,
   SaleWithItems,
 } from "../../domain/entities/sale.js";
+import type { IdempotencyClaim } from "../../application/ports/idempotency-repository.js";
+import { SqliteIdempotencyWriteContext } from "./sqlite-idempotency-repository.js";
 import type { SqliteContext } from "../database/sqlite.js";
 import type { SqliteDatabase } from "../database/sqlite.js";
 import {
@@ -71,6 +73,10 @@ class SqliteSaleWriteContext implements SaleWriteContext {
           .where(eq(products.id, change.productId));
       });
     }
+  }
+
+  async claimIdempotency(claim: IdempotencyClaim): Promise<void> {
+    await new SqliteIdempotencyWriteContext(this.ctx).claimIdempotency(claim);
   }
 
   async recordMovements(movements: MovementDraft[]): Promise<void> {

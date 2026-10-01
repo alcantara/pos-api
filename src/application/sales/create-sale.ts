@@ -15,10 +15,20 @@ export interface CreateSaleItemInput {
   quantity: number;
 }
 
+export interface SaleIdempotencyClaim {
+  key: string;
+  requestHash: string;
+}
+
 export interface CreateSaleInput {
   customerId?: string | null;
   userId: string;
   items: CreateSaleItemInput[];
+  /**
+   * Present when the request carries an `Idempotency-Key`. Claimed inside this
+   * transaction so the key and the sale commit or roll back together.
+   */
+  claim?: SaleIdempotencyClaim;
 }
 
 function normalizeItems(items: CreateSaleItemInput[]): CreateSaleItemInput[] {
@@ -86,6 +96,19 @@ export async function createSale(
       createdAt: now,
       updatedAt: now,
     };
+
+    if (input.claim) {
+      if (!ctx.claimIdempotency) {
+        throw new Error("Repository does not support idempotency keys");
+      }
+      await ctx.claimIdempotency({
+        key: input.claim.key,
+        userId: input.userId,
+        requestHash: input.claim.requestHash,
+        resourceId: sale.id,
+        createdAt: now,
+      });
+    }
 
     await ctx.insertSale(sale);
     await ctx.insertSaleItems(saleItems);

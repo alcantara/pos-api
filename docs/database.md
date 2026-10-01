@@ -38,3 +38,19 @@ Version/updated_at field on mutable resources. Stale writes return 409 Conflict.
 `pnpm db:seed` creates deterministic dev data: admin/manager/cashier roles,
 sample categories, products, customers. Dev-only credentials — documented,
 never real secrets.
+
+## `idempotency_records`
+
+Written by `POST /sales` when the request carries an `Idempotency-Key`.
+
+| Column         | Notes                                         |
+| -------------- | --------------------------------------------- |
+| `user_id`      | FK → `users.id`, `ON DELETE CASCADE`          |
+| `key`          | client token, 1–200 chars (CHECK)             |
+| `request_hash` | SHA-256 of the canonical body; mismatch → 409 |
+| `resource_id`  | id of the created sale                        |
+
+Unique index on `(user_id, key)`. The row is inserted in the same transaction
+as the sale, so the key cannot outlive a failed sale and a key can never be
+claimed by two sales. Check constraint only — a stale key expires with no
+cleanup job; records grow with distinct keys per user.

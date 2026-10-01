@@ -141,3 +141,21 @@ export const inventoryMovements = sqliteTable(
     index("inventory_movements_product_created_idx").on(t.productId, t.createdAt),
   ],
 );
+
+export const idempotencyRecords = sqliteTable(
+  "idempotency_records",
+  {
+    key: text("key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    requestHash: text("request_hash").notNull(),
+    resourceId: text("resource_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("idempotency_records_user_key_uq").on(t.userId, t.key),
+    check("idempotency_records_key_valid", sql`length(${t.key}) between 1 and 200`),
+    index("idempotency_records_created_at_idx").on(t.createdAt),
+  ],
+);

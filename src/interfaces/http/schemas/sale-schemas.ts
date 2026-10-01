@@ -27,6 +27,19 @@ export const createSaleSchema = z
     }
   });
 
+export const IDEMPOTENCY_HEADER = "idempotency-key";
+
+/**
+ * Client-supplied retry token. Scoped per user, so a key may be reused by a
+ * different user without collision.
+ */
+export const idempotencyKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[\x21-\x7e]+$/, "must be printable ASCII without spaces");
+
 export const listSalesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -41,5 +54,6 @@ export const saleIdParamsSchema = z.object({
 });
 
 export type CreateSaleBody = z.infer<typeof createSaleSchema>;
+export type IdempotencyKey = z.infer<typeof idempotencyKeySchema>;
 export type ListSalesQuery = z.infer<typeof listSalesQuerySchema>;
 export type SaleIdParams = z.infer<typeof saleIdParamsSchema>;

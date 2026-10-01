@@ -5,6 +5,7 @@ import type {
   SaleWithItems,
 } from "../../domain/entities/sale.js";
 import type { Product } from "../../domain/entities/product.js";
+import type { IdempotencyClaim } from "./idempotency-repository.js";
 import type { MovementDraft, StockChange } from "./inventory-repository.js";
 import type { SortOrder } from "./product-repository.js";
 
@@ -38,6 +39,11 @@ export interface SaleWriteContext {
   updateSale(sale: Sale): Promise<void>;
   applyStockChanges(changes: StockChange[]): Promise<void>;
   recordMovements(movements: MovementDraft[]): Promise<void>;
+  /**
+   * Optional: present when the request carries an `Idempotency-Key`. The record
+   * is written in this transaction, so the key and the sale commit together.
+   */
+  claimIdempotency?(claim: IdempotencyClaim): Promise<void>;
 }
 
 export interface SaleRepository {

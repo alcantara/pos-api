@@ -18,6 +18,8 @@ Implemented:
 - Products, categories and customers — CRUD, search, sorting, pagination
 - Transactional sales — server-priced lines, stock validation, atomic stock
   decrement, cancellation with stock restoration
+- Idempotent sale creation — `Idempotency-Key` claimed inside the sale
+  transaction, so retries and duplicate deliveries never charge twice
 - Inventory adjustments and a movement ledger shared by sales and adjustments
 - OAuth 2.0 / OIDC login flow (PKCE, state, nonce) with stateless signed sessions
 - REST + HATEOAS, offset pagination (max 100), consistent error envelope
@@ -28,10 +30,10 @@ Implemented:
 - Structured logging (pino) with request IDs
 - Docker, Docker Compose, GitHub Actions CI, three-tier Vitest suite (500+ tests)
 
-Planned (Phases 11–15):
+Planned:
 
-- Idempotency keys on `POST /sales`, audit log
-- OpenAPI specification and deployment pipeline
+- Audit log for sensitive operations
+- OpenAPI specification
 
 ## Tech stack
 

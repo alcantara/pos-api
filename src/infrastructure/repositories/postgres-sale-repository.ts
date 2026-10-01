@@ -17,6 +17,7 @@ import type {
   SaleStatus,
   SaleWithItems,
 } from "../../domain/entities/sale.js";
+import type { IdempotencyClaim } from "../../application/ports/idempotency-repository.js";
 import type { PgContext, PostgresDatabase } from "../database/postgres.js";
 import {
   inventoryMovements,
@@ -24,6 +25,7 @@ import {
   saleItems,
   sales,
 } from "../database/schema/postgres.js";
+import { PostgresIdempotencyWriteContext } from "./postgres-idempotency-repository.js";
 
 type SaleRow = typeof sales.$inferSelect;
 
@@ -94,6 +96,10 @@ class PostgresSaleWriteContext implements SaleWriteContext {
         .set({ stockQuantity: sql`${products.stockQuantity} + ${change.delta}` })
         .where(eq(products.id, change.productId));
     }
+  }
+
+  async claimIdempotency(claim: IdempotencyClaim): Promise<void> {
+    await new PostgresIdempotencyWriteContext(this.ctx).claimIdempotency(claim);
   }
 
   async recordMovements(movements: MovementDraft[]): Promise<void> {

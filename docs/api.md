@@ -118,6 +118,26 @@ present while the sale is `COMPLETED`.
 `sort` (`createdAt` \| `totalCents`, default `createdAt`) and `order` (default
 `desc`).
 
+### Idempotency
+
+`POST /sales` accepts an optional `Idempotency-Key` header (1–200 printable ASCII
+characters, no spaces). Keys are **scoped per user**, so two users may use the
+same key and no user can be handed another user's sale.
+
+| Situation                     | Response                                         |
+| ----------------------------- | ------------------------------------------------ |
+| First request with a key      | 201 + `Location`                                 |
+| Same key, same body           | 200 + `Idempotent-Replayed: true`, original body |
+| Same key, different body      | 409 `CONFLICT`                                   |
+| Concurrent requests, same key | one 201, the rest replay the same sale           |
+
+The key is claimed **inside the sale transaction**, so the key and the sale
+commit or roll back together: a retried or duplicated request can never charge
+the customer twice, and a sale that fails (for example insufficient stock)
+leaves the key free for a corrected retry. The unique index on
+`(user_id, key)` is the arbiter, so exactly one of N concurrent identical
+requests wins.
+
 ## Inventory
 
 | Method | Path                     | Roles              | Notes                       |

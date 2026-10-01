@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Dependencies } from "../../../application/dependencies.js";
 import { cancelSale } from "../../../application/sales/cancel-sale.js";
-import { createSale } from "../../../application/sales/create-sale.js";
+import { createSaleIdempotently } from "../../../application/sales/create-sale-idempotently.js";
 import { getSale } from "../../../application/sales/get-sale.js";
 import { listSales } from "../../../application/sales/list-sales.js";
 import { resolveCurrentUser } from "../authz.js";
@@ -9,6 +9,8 @@ import { API_PREFIX, withPage } from "../hateoas.js";
 import { saleRepresentation } from "../mappers/sale-mapper.js";
 import {
   createSaleSchema,
+  IDEMPOTENCY_HEADER,
+  idempotencyKeySchema,
   listSalesQuerySchema,
   saleIdParamsSchema,
 } from "../schemas/sale-schemas.js";
@@ -64,14 +66,29 @@ export function createSaleController(
     create: async (request, reply) => {
       const input = createSaleSchema.parse(request.body);
       const actor = await resolveCurrentUser(request, dependencies, cookieSecret);
-      const sale = await createSale(dependencies.sales, {
-        customerId: input.customerId ?? null,
-        userId: actor.id,
-        items: input.items,
-      });
+      const rawKey = request.headers[IDEMPOTENCY_HEADER];
+      const idempotencyKey =
+        rawKey === undefined ? undefined : idempotencyKeySchema.parse(rawKey);
 
-      reply.header("Location", `${API_PREFIX}/sales/${sale.id}`);
-      return reply.code(201).send(saleRepresentation(sale));
+      const outcome = await createSaleIdempotently(
+        dependencies.sales,
+        dependencies.idempotency,
+        {
+          customerId: input.customerId ?? null,
+          userId: actor.id,
+          items: input.items,
+        },
+        idempotencyKey ? { idempotencyKey } : {},
+      );
+
+      if (outcome.replayed) {
+        reply.header("idempotent-replayed", "true");
+        reply.header("location", `${API_PREFIX}/sales/${outcome.sale.id}`);
+        return reply.code(200).send(saleRepresentation(outcome.sale));
+      }
+
+      reply.header("Location", `${API_PREFIX}/sales/${outcome.sale.id}`);
+      return reply.code(201).send(saleRepresentation(outcome.sale));
     },
 
     get: async (request, reply) => {
