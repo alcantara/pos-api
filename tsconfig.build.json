@@ -8,5 +8,9 @@
     "sourceMap": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.test.ts", "tests/**/*"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/infrastructure/database/compose-up.ts",
+    "tests/**/*"
+  ]
 }
