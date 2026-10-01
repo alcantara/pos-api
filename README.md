@@ -7,27 +7,30 @@ Production-quality REST API for a Point of Sale (POS) system, built with
 
 Greenfield portfolio project demonstrating professional backend engineering:
 clean architecture, OAuth 2.0 / OpenID Connect authentication, role-based
-authorization, dual-dialect database support, and a three-tier test suite
-covering SQLite and PostgreSQL. It is built phase by phase according to the
-roadmap below.
+authorization, transactional sales with inventory safety, dual-dialect database
+support, and a three-tier test suite covering SQLite and PostgreSQL. It is
+built phase by phase according to the roadmap below.
 
 ## Features
 
 Implemented:
 
 - Products, categories and customers — CRUD, search, sorting, pagination
+- Transactional sales — server-priced lines, stock validation, atomic stock
+  decrement, cancellation with stock restoration
+- Inventory adjustments and a movement ledger shared by sales and adjustments
 - OAuth 2.0 / OIDC login flow (PKCE, state, nonce) with stateless signed sessions
 - REST + HATEOAS, offset pagination (max 100), consistent error envelope
-- SQLite and PostgreSQL selected through `DATABASE_URL`
+- SQLite and PostgreSQL selected through `DATABASE_URL`, identical behavior on both
 - Zod input validation at the HTTP boundary, sanitized errors, `/health`
 - Role-based authorization (ADMIN / MANAGER / CASHIER) via `requireRole` guards
+- Hardening — rate limiting, security headers, explicit CORS allowlist, CSRF
 - Structured logging (pino) with request IDs
-- Docker, Docker Compose, GitHub Actions CI, three-tier Vitest suite
+- Docker, Docker Compose, GitHub Actions CI, three-tier Vitest suite (500+ tests)
 
-Planned (Phases 8–15):
+Planned (Phases 11–15):
 
-- Transactional sales with stock validation, inventory movements
-- Rate limiting, security headers, CORS, CSRF protection
+- Idempotency keys on `POST /sales`, audit log
 - OpenAPI specification and deployment pipeline
 
 ## Tech stack

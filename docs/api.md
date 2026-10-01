@@ -18,21 +18,34 @@ Every non-2xx response uses the same shape:
 }
 ```
 
-`details` is present only for validation failures. Server errors are
-sanitized to `INTERNAL_ERROR` / `Internal server error`.
+`details` is present only for validation failures. Server errors are sanitized
+to `INTERNAL_ERROR` / `Internal server error`.
 
-| Code                                                                         | HTTP |
-| ---------------------------------------------------------------------------- | ---- |
-| `VALIDATION_ERROR`, `BAD_REQUEST`                                            | 400  |
-| `UNAUTHORIZED`                                                               | 401  |
-| `FORBIDDEN`                                                                  | 403  |
-| `NOT_FOUND`, `PRODUCT_NOT_FOUND`, `CATEGORY_NOT_FOUND`, `CUSTOMER_NOT_FOUND` | 404  |
-| `CONFLICT`, `INSUFFICIENT_STOCK`                                             | 409  |
-| `RATE_LIMITED`                                                               | 429  |
-| `AUTH_NOT_CONFIGURED`                                                        | 503  |
-| `INTERNAL_ERROR`                                                             | 500  |
+| Code                                                                                           | HTTP |
+| ---------------------------------------------------------------------------------------------- | ---- |
+| `VALIDATION_ERROR`, `BAD_REQUEST`                                                              | 400  |
+| `UNAUTHORIZED`                                                                                 | 401  |
+| `FORBIDDEN` (role or CSRF)                                                                     | 403  |
+| `NOT_FOUND`, `PRODUCT_NOT_FOUND`, `CATEGORY_NOT_FOUND`, `CUSTOMER_NOT_FOUND`, `SALE_NOT_FOUND` | 404  |
+| `CONFLICT`, `INSUFFICIENT_STOCK`                                                               | 409  |
+| `RATE_LIMITED`                                                                                 | 429  |
+| `AUTH_NOT_CONFIGURED`                                                                          | 503  |
+| `INTERNAL_ERROR`                                                                               | 500  |
 
 ## Collection endpoints
+
+`GET /products`, `GET /categories`, `GET /customers`, `GET /sales` and
+`GET /inventory/movements` share the pagination envelope:
+
+```json
+{
+  "data": [ ... ],
+  "pagination": { "page": 1, "limit": 20, "total": 3, "totalPages": 1 },
+  "_links": { "prev": { "href": "..." }, "next": { "href": "..." } }
+}
+```
+
+`prev`/`next` are omitted at the boundaries.
 
 `GET /products`, `GET /categories`, `GET /customers` accept:
 
@@ -47,33 +60,6 @@ sanitized to `INTERNAL_ERROR` / `Internal server error`.
 Search fields: products → `name`, `sku`; customers → `name`, `email`,
 `phone`; categories → `name`.
 
-Response envelope:
-
-```json
-{
-  "data": [ ... ],
-  "pagination": { "page": 1, "limit": 20, "total": 3, "totalPages": 1 },
-  "_links": { "prev": { "href": "..." }, "next": { "href": "..." } }
-}
-```
-
-`prev`/`next` are omitted at the boundaries.
-
-## Authorization
-
-Every resource route requires a valid `pos_session` cookie and a role:
-
-| Operation                 | Roles              | Failure |
-| ------------------------- | ------------------ | ------- |
-| `GET` collection or item  | any of the three   | 401/403 |
-| `POST`, `PATCH`, `DELETE` | `ADMIN`, `MANAGER` | 401/403 |
-
-Missing, tampered or expired session → 401 `UNAUTHORIZED`. Authenticated but
-not permitted → 403 `FORBIDDEN`. Missing `COOKIE_SECRET` → 503
-`AUTH_NOT_CONFIGURED`.
-
-`/auth/login` and `/auth/callback` are public; `/health` is public.
-
 ## Resources
 
 | Method   | Path                                                 | Success                   |
@@ -87,9 +73,90 @@ not permitted → 403 `FORBIDDEN`. Missing `COOKIE_SECRET` → 503
 Item responses are flat objects with ISO timestamps and HATEOAS `_links`
 (`self`, `update`, `delete`). Updates are partial (PATCH); an empty body is
 rejected. Deleting a category clears `categoryId` on its products
-(`ON DELETE SET NULL`); deleting a customer with sales is rejected with 409.
+(`ON DELETE SET NULL`); deleting a customer or product referenced by a sale is
+rejected with 409.
 
 Unknown fields in request bodies are rejected with 400 (strict schemas).
+
+## Sales
+
+| Method | Path                | Roles              | Notes                                       |
+| ------ | ------------------- | ------------------ | ------------------------------------------- |
+| `POST` | `/sales`            | any authenticated  | 201 + `Location`; the acting user is stored |
+| `GET`  | `/sales`            | any authenticated  | filters `status`, `customerId`              |
+| `GET`  | `/sales/:id`        | any authenticated  | includes `items`                            |
+| `POST` | `/sales/:id/cancel` | `ADMIN`, `MANAGER` | 200 with `status: CANCELLED`                |
+
+```json
+{
+  "items": [{ "productId": "…", "quantity": 2 }],
+  "customerId": "…"
+}
+```
+
+`customerId` is optional. Prices are **never** taken from the request: each
+line is priced from the product row inside the sale transaction, so
+`unitPriceCents` and `subtotalCents` are server-computed and `totalCents` is
+their sum.
+
+Creating a sale is atomic: the product rows are locked, stock is decremented
+and a `SALE` movement is appended to the inventory ledger, all in one
+transaction. Rules:
+
+- `items` must contain 1–100 lines, each with `quantity ≥ 1`, and a product may
+  not repeat in the same sale (400)
+- unknown product → 404 `PRODUCT_NOT_FOUND`
+- `quantity` above available stock → 409 `INSUFFICIENT_STOCK`, and **nothing is
+  written** — concurrent sales cannot oversell or lose an update
+- a product referenced by a sale cannot be deleted (409 `CONFLICT`)
+
+Cancellation restores the stock, appends a `CANCELLATION` movement and flips
+the status; cancelling twice is 409 `CONFLICT`. The `_links.cancel` link is only
+present while the sale is `COMPLETED`.
+
+`GET /sales` accepts `status` (`COMPLETED` \| `CANCELLED`), `customerId`,
+`sort` (`createdAt` \| `totalCents`, default `createdAt`) and `order` (default
+`desc`).
+
+## Inventory
+
+| Method | Path                     | Roles              | Notes                       |
+| ------ | ------------------------ | ------------------ | --------------------------- |
+| `GET`  | `/inventory/movements`   | any authenticated  | filters `productId`, `type` |
+| `POST` | `/inventory/adjustments` | `ADMIN`, `MANAGER` | 201 + `Location`            |
+
+```json
+{ "productId": "…", "quantity": 5, "type": "PURCHASE", "reason": "Restock" }
+```
+
+`type` is `PURCHASE`, `ADJUSTMENT` or `RETURN`; `quantity` is a non-zero signed
+integer (positive adds stock, negative removes it) and `reason` is optional.
+A removal larger than the available stock is 409 `INSUFFICIENT_STOCK` with no
+partial write. Every change is appended to the ledger, so a product's history
+is reconstructable regardless of whether it came from a sale, a cancellation
+or a manual adjustment.
+
+`GET /inventory/movements` accepts `productId`, `type` (`SALE`, `PURCHASE`,
+`ADJUSTMENT`, `RETURN`, `CANCELLATION`), `sort` (`createdAt` \| `quantity`) and
+`order` (default `desc`).
+
+## Authorization
+
+| Operation                                               | Roles              | Failure |
+| ------------------------------------------------------- | ------------------ | ------- |
+| `GET` collection or item (all resources)                | any of the three   | 401/403 |
+| `POST`/`PATCH`/`DELETE` products, categories, customers | `ADMIN`, `MANAGER` | 401/403 |
+| `POST /sales`                                           | any of the three   | 401/403 |
+| `POST /sales/:id/cancel`                                | `ADMIN`, `MANAGER` | 401/403 |
+| `POST /inventory/adjustments`                           | `ADMIN`, `MANAGER` | 401/403 |
+
+Missing, tampered or expired session → 401 `UNAUTHORIZED`. Authenticated but
+not permitted → 403 `FORBIDDEN`. Missing `COOKIE_SECRET` → 503
+`AUTH_NOT_CONFIGURED`. Roles are reloaded from the database on every request,
+so a promotion or deletion applies immediately.
+
+`/auth/login` and `/auth/callback` are public; `/health` is public and never
+rate-limited.
 
 ## Authentication
 
@@ -99,12 +166,31 @@ production). No bearer tokens.
 | Method | Path             | Behavior                                                                               |
 | ------ | ---------------- | -------------------------------------------------------------------------------------- |
 | `GET`  | `/auth/login`    | 302 to the OIDC provider (sets `pos_oauth` pending-login cookie with state/nonce/PKCE) |
-| `GET`  | `/auth/callback` | 302 to `/` on success (sets `pos_session`, 8 h); 401 on failure                        |
+| `GET`  | `/auth/callback` | 302 to `/` on success (sets `pos_session` + `pos_csrf`, 8 h); 401 on failure           |
 | `GET`  | `/auth/me`       | 200 current user or 401                                                                |
-| `POST` | `/auth/logout`   | 204, clears the session cookie                                                         |
+| `POST` | `/auth/logout`   | 204, clears the session and CSRF cookies                                               |
+
+New OIDC users are created as `CASHIER`; `pnpm db:seed` pre-creates
+`admin@pos.local`, `manager@pos.local` and `cashier@pos.local` so a matching
+identity provider account inherits the intended role.
 
 When OAuth is not configured, login and `/me` answer 503
 `AUTH_NOT_CONFIGURED` (fail closed).
+
+## Hardening
+
+| Control          | Behaviour                                                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Rate limiting    | per client IP; 429 `RATE_LIMITED` + `retry-after`; `x-ratelimit-limit/remaining/reset` headers                                         |
+| Security headers | `x-content-type-options`, `x-frame-options`, `referrer-policy`, `cross-origin-opener-policy`, `permissions-policy`; HSTS in production |
+| CORS             | only when `CORS_ORIGINS` is set, and only for allowlisted origins                                                                      |
+| CSRF             | double-submit: cookie-authenticated writes must echo `pos_csrf` in `x-csrf-token`, else 403                                            |
+| Body size        | 1 MiB limit; larger bodies are rejected with 413                                                                                       |
+| Sanitized errors | no stack traces, SQL text or paths in responses                                                                                        |
+
+Rate limiting and CSRF apply to every `/api/v1` route; requests without a
+session cookie are answered 401 before the CSRF check, so unauthenticated
+callers never learn about the token.
 
 ## Health
 
