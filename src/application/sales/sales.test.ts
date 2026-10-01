@@ -14,13 +14,12 @@ import {
   SaleNotFoundError,
 } from "../../domain/entities/sale.js";
 import { ValidationError } from "../../domain/errors/domain-error.js";
+import type { MovementDraft, StockChange } from "../ports/inventory-repository.js";
 import type {
   ListSalesParams,
-  MovementDraft,
   PagedSales,
   SaleRepository,
   SaleWriteContext,
-  StockChange,
 } from "../ports/sale-repository.js";
 import { cancelSale } from "./cancel-sale.js";
 import { createSale } from "./create-sale.js";

@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, count, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type {
-  ListSalesParams,
   MovementDraft,
+  StockChange,
+} from "../../application/ports/inventory-repository.js";
+import type {
+  ListSalesParams,
   PagedSales,
   SaleRepository,
   SaleWriteContext,
-  StockChange,
 } from "../../application/ports/sale-repository.js";
 import type { Product } from "../../domain/entities/product.js";
 import type {

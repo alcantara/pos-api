@@ -1,11 +1,11 @@
 import type {
-  InventoryMovement,
   Sale,
   SaleItem,
   SaleStatus,
   SaleWithItems,
 } from "../../domain/entities/sale.js";
 import type { Product } from "../../domain/entities/product.js";
+import type { MovementDraft, StockChange } from "./inventory-repository.js";
 import type { SortOrder } from "./product-repository.js";
 
 export type SaleSortField = "createdAt" | "totalCents";
@@ -23,13 +23,6 @@ export interface PagedSales {
   rows: Sale[];
   total: number;
 }
-
-export interface StockChange {
-  productId: string;
-  delta: number;
-}
-
-export type MovementDraft = Omit<InventoryMovement, "id">;
 
 /**
  * Transaction-scoped writer for the sales aggregate. Reads that decide stock

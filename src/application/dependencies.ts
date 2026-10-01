@@ -1,5 +1,6 @@
 import type { CategoryRepository } from "./ports/category-repository.js";
 import type { CustomerRepository } from "./ports/customer-repository.js";
+import type { InventoryRepository } from "./ports/inventory-repository.js";
 import type { OidcProvider } from "./ports/oidc-provider.js";
 import type { ProductRepository } from "./ports/product-repository.js";
 import type { SaleRepository } from "./ports/sale-repository.js";
@@ -10,6 +11,7 @@ export interface Dependencies {
   categories: CategoryRepository;
   customers: CustomerRepository;
   sales: SaleRepository;
+  inventory: InventoryRepository;
   users: UserRepository;
   oidc: OidcProvider;
 }
