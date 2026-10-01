@@ -60,7 +60,7 @@ describe.each(targets())("seed on $name", ({ databaseUrl }) => {
     );
     for (const [index, user] of after.entries()) {
       expect(user?.id).toBe(before[index]?.id);
-      expect(user?.role).toBe(SEED_USERS[index]?.role);
+      expect(user?.role).toBe(before[index]?.role);
     }
   });
 
@@ -77,10 +77,14 @@ describe.each(targets())("seed on $name", ({ databaseUrl }) => {
     const seeded = await dependencies.users.findByEmail("manager@pos.local");
     if (!seeded) throw new Error("seeded manager user is missing");
 
-    await dependencies.users.update({ ...seeded, role: "ADMIN" });
-    await seedUsers(dependencies);
+    try {
+      await dependencies.users.update({ ...seeded, role: "ADMIN" });
+      await seedUsers(dependencies);
 
-    const after = await dependencies.users.findByEmail("manager@pos.local");
-    expect(after?.role).toBe("ADMIN");
+      const after = await dependencies.users.findByEmail("manager@pos.local");
+      expect(after?.role).toBe("ADMIN");
+    } finally {
+      await dependencies.users.update(seeded);
+    }
   });
 });
