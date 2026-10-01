@@ -29,6 +29,8 @@ pnpm dev
 - `pnpm db:migrate` / `pnpm db:seed` — schema / deterministic users + catalog
 - `pnpm test` — all tests
 - `pnpm test:unit` / `pnpm test:integration` / `pnpm test:e2e` — per level
+- `pnpm test:spec` — validate `docs/openapi.yaml`
+- `pnpm test:docs` — spec/route agreement
 - `pnpm lint` / `pnpm typecheck` — code quality
 
 ## Docker

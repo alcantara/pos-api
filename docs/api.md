@@ -1,5 +1,8 @@
 # API
 
+Machine-readable contract: [`openapi.yaml`](./openapi.yaml) (OpenAPI 3.1) —
+see the [reference guide](./openapi.md).
+
 Base URL: `/api/v1`. All responses are JSON except redirects. Timestamps are
 RFC 3339 (ISO 8601) strings derived from epoch-millisecond integers; money is
 integer cents (`priceCents`, `totalCents`).

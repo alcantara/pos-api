@@ -46,6 +46,7 @@ TypeScript · Node.js · Fastify · Drizzle ORM · SQLite · PostgreSQL · Zod �
 - [Database](docs/database.md)
 - [Development](docs/development.md)
 - [API](docs/api.md)
+- [OpenAPI reference](docs/openapi.md)
 
 ## Phases
 

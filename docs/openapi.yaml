@@ -1,0 +1,1431 @@
+openapi: 3.1.0
+
+info:
+  title: POS API
+  version: 1.0.0
+  summary: Point-of-sale REST API with OAuth 2.0 / OIDC, RBAC and transactional sales.
+  description: |
+    REST + HATEOAS API for a point-of-sale system.
+
+    ## Conventions
+
+    - Money is always **integer cents** (`priceCents`, `totalCents`).
+    - Timestamps are RFC 3339 strings derived from epoch milliseconds.
+    - Collections return an envelope with `data`, `pagination` and `_links`.
+    - Unknown request-body fields are rejected (`strict` validation).
+    - Prices are never read from the request: sale lines are priced from the
+      product row inside the sale transaction.
+
+    ## Authentication
+
+    Stateless cookie session. `GET /auth/login` starts the OIDC code flow with
+    PKCE; the callback sets `pos_session` (HttpOnly) and `pos_csrf` cookies.
+
+    ## Authorization
+
+    | Operation                                          | Roles                |
+    | -------------------------------------------------- | -------------------- |
+    | Read any collection or item                        | any authenticated    |
+    | Create, update, delete products/categories/customers | `ADMIN`, `MANAGER`   |
+    | Create a sale                                      | any authenticated    |
+    | Cancel a sale                                      | `ADMIN`, `MANAGER`   |
+    | Adjust stock                                       | `ADMIN`, `MANAGER`   |
+
+    Missing or invalid session → `401`. Authenticated but not permitted → `403`.
+    Auth not configured → `503 AUTH_NOT_CONFIGURED`.
+
+    ## CSRF
+
+    Cookie-authenticated writes must echo the `pos_csrf` cookie in the
+    `x-csrf-token` header, otherwise `403 FORBIDDEN`. Requests without a session
+    cookie are answered `401` before the CSRF check.
+
+    ## Idempotency
+
+    `POST /sales` accepts an `Idempotency-Key` header (1–200 printable ASCII
+    characters, no spaces), scoped per user. The key is claimed inside the sale
+    transaction, so a retry or duplicate delivery replays the original sale
+    instead of charging twice. Reusing a key with a different body → `409`.
+
+    ## Rate limiting
+
+    Per client IP. Exceeding the budget yields `429 RATE_LIMITED` plus
+    `Retry-After`. Every response carries `x-ratelimit-limit`,
+    `x-ratelimit-remaining` and `x-ratelimit-reset`. `/health` is exempt.
+
+  license:
+    name: MIT
+  contact:
+    name: POS API
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development
+  - url: https://api.pos.example/api/v1
+    description: Production placeholder
+
+tags:
+  - name: Auth
+    description: OAuth 2.0 / OIDC session lifecycle.
+  - name: Categories
+    description: Product categories. Writes require ADMIN or MANAGER.
+  - name: Products
+    description: Catalog. Writes require ADMIN or MANAGER.
+  - name: Customers
+    description: Customer records. Writes require ADMIN or MANAGER.
+  - name: Sales
+    description: Transactional sales, stock decrement and cancellation.
+  - name: Inventory
+    description: Stock adjustments and the movement ledger.
+  - name: Health
+    description: Liveness probe, outside the versioned API.
+
+security:
+  - sessionCookie: []
+
+paths:
+  /auth/login:
+    get:
+      operationId: authLogin
+      tags: [Auth]
+      summary: Start the OIDC authorization code flow
+      description: |
+        Redirects to the identity provider with `state`, `nonce` and a PKCE
+        challenge, and sets the pending-login cookie.
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          description: Relative path to return to after login.
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to the identity provider.
+          headers:
+            Location:
+              description: Provider authorization endpoint.
+              schema:
+                type: string
+                format: uri
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /auth/callback:
+    get:
+      operationId: authCallback
+      tags: [Auth]
+      summary: Complete the OIDC code flow
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: false
+          description: Authorization code (absent on error).
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: |
+            Redirect to `/` on success, setting `pos_session` and `pos_csrf`
+            cookies (8 h). New users are created as `CASHIER`.
+          headers:
+            Location:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/me:
+    get:
+      operationId: authMe
+      tags: [Auth]
+      summary: Return the authenticated user
+      responses:
+        "200":
+          description: Current user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /auth/logout:
+    post:
+      operationId: authLogout
+      tags: [Auth]
+      summary: Clear the session
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "204":
+          description: Session and CSRF cookies cleared.
+          headers:
+            Set-Cookie:
+              description: Expiring `pos_session` and `pos_csrf` cookies.
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [Categories]
+      summary: List categories
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Search"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, createdAt]
+            default: name
+        - name: order
+          in: query
+          schema:
+            $ref: "#/components/schemas/SortOrder"
+      responses:
+        "200":
+          description: Paginated categories.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/CollectionEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Category"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    post:
+      operationId: createCategory
+      tags: [Categories]
+      summary: Create a category
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategory"
+      responses:
+        "201":
+          description: Category created.
+          headers:
+            Location:
+              description: URL of the new category.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /categories/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      operationId: getCategory
+      tags: [Categories]
+      summary: Get a category by id
+      responses:
+        "200":
+          description: The category.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateCategory
+      tags: [Categories]
+      summary: Update a category
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCategory"
+      responses:
+        "200":
+          description: The updated category.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      operationId: deleteCategory
+      tags: [Categories]
+      summary: Delete a category
+      description: Products in this category keep existing with `categoryId` set to `null`.
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "204":
+          description: Category deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /products:
+    get:
+      operationId: listProducts
+      tags: [Products]
+      summary: List products
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Search"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, price, createdAt]
+            default: name
+        - name: order
+          in: query
+          schema:
+            $ref: "#/components/schemas/SortOrder"
+      responses:
+        "200":
+          description: Paginated products.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/CollectionEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Product"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    post:
+      operationId: createProduct
+      tags: [Products]
+      summary: Create a product
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProduct"
+      responses:
+        "201":
+          description: Product created.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /products/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      operationId: getProduct
+      tags: [Products]
+      summary: Get a product by id
+      responses:
+        "200":
+          description: The product.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateProduct
+      tags: [Products]
+      summary: Update a product
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProduct"
+      responses:
+        "200":
+          description: The updated product.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      operationId: deleteProduct
+      tags: [Products]
+      summary: Delete a product
+      description: Rejected with `409` when a sale references this product.
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "204":
+          description: Product deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [Customers]
+      summary: List customers
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Search"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, createdAt]
+            default: name
+        - name: order
+          in: query
+          schema:
+            $ref: "#/components/schemas/SortOrder"
+      responses:
+        "200":
+          description: Paginated customers.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/CollectionEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Customer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createCustomer
+      tags: [Customers]
+      summary: Create a customer
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomer"
+      responses:
+        "201":
+          description: Customer created.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /customers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      operationId: getCustomer
+      tags: [Customers]
+      summary: Get a customer by id
+      responses:
+        "200":
+          description: The customer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateCustomer
+      tags: [Customers]
+      summary: Update a customer
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomer"
+      responses:
+        "200":
+          description: The updated customer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      operationId: deleteCustomer
+      tags: [Customers]
+      summary: Delete a customer
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "204":
+          description: Customer deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /sales:
+    get:
+      operationId: listSales
+      tags: [Sales]
+      summary: List sales
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [COMPLETED, CANCELLED]
+        - name: customerId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [createdAt, totalCents]
+            default: createdAt
+        - name: order
+          in: query
+          schema:
+            $ref: "#/components/schemas/SortOrder"
+      responses:
+        "200":
+          description: |
+            Paginated sales **without** line items. Fetch a sale by id to read
+            its items.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/CollectionEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SaleSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createSale
+      tags: [Sales]
+      summary: Create a sale
+      description: |
+        Creates a sale, prices every line from the database and decrements stock
+        atomically. Concurrency-safe: concurrent sales can never oversell.
+
+        Send an `Idempotency-Key` to make retries safe — the key is claimed in
+        the same transaction, so a duplicate delivery replays this sale instead
+        of charging again.
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSale"
+      responses:
+        "201":
+          description: Sale created and stock decremented.
+          headers:
+            Location:
+              description: URL of the new sale.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "200":
+          description: |
+            Idempotent replay of an earlier sale with the same key and body.
+            Carries `Idempotent-Replayed: true`.
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+                const: "true"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Unknown product (`PRODUCT_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: |
+            `INSUFFICIENT_STOCK` when a line exceeds available stock (nothing is
+            written), or `CONFLICT` when an `Idempotency-Key` is reused with a
+            different body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: Body larger than 1 MiB.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /sales/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      operationId: getSale
+      tags: [Sales]
+      summary: Get a sale with its items
+      responses:
+        "200":
+          description: The sale, including line items.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sales/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      operationId: cancelSale
+      tags: [Sales]
+      summary: Cancel a sale
+      description: |
+        Restores the stock of every line, appends `CANCELLATION` movements and
+        flips the status. Requires `ADMIN` or `MANAGER`. Cancelling twice → `409`.
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "200":
+          description: Sale cancelled, stock restored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Already cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /inventory/movements:
+    get:
+      operationId: listInventoryMovements
+      tags: [Inventory]
+      summary: List inventory movements
+      description: |
+        The movement ledger, shared by sales, cancellations and manual
+        adjustments, so a product's history is always reconstructable.
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: productId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [SALE, PURCHASE, ADJUSTMENT, RETURN, CANCELLATION]
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [createdAt, quantity]
+            default: createdAt
+        - name: order
+          in: query
+          schema:
+            $ref: "#/components/schemas/SortOrder"
+      responses:
+        "200":
+          description: Paginated movements.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/CollectionEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/InventoryMovement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /inventory/adjustments:
+    post:
+      operationId: adjustStock
+      tags: [Inventory]
+      summary: Adjust stock
+      description: |
+        Applies a signed change to the stock of one product and appends the
+        matching movement. A removal larger than the available stock is rejected
+        with `409` and writes nothing. Requires `ADMIN` or `MANAGER`.
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdjustStock"
+      responses:
+        "201":
+          description: Adjustment applied.
+          headers:
+            Location:
+              description: Ledger filtered to the adjusted product.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryMovement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Unknown product.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Insufficient stock.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: pos_session
+      description: |
+        Signed, HttpOnly, SameSite=Lax session cookie set by `/auth/callback`.
+        Combined with the CSRF header on writes.
+
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    Search:
+      name: search
+      in: query
+      description: Case-insensitive; LIKE metacharacters are treated literally.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+
+    CsrfToken:
+      name: x-csrf-token
+      in: header
+      required: false
+      description: |
+        Required for cookie-authenticated writes: must equal the `pos_csrf`
+        cookie. Omit only when CSRF protection is disabled server-side.
+      schema:
+        type: string
+
+    IdempotencyKey:
+      name: idempotency-key
+      in: header
+      required: false
+      description: |
+        Retry token, scoped per user. Reusing a key with a different body
+        returns `409`.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+        pattern: "^[\\x21-\\x7e]+$"
+
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing, tampered or expired session.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: UNAUTHORIZED
+              message: Authentication required
+    Forbidden:
+      description: |
+        Authenticated but not permitted (role or missing/invalid CSRF token).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: FORBIDDEN
+              message: Role CASHIER cannot perform this operation
+    NotFound:
+      description: Resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: PRODUCT_NOT_FOUND
+              message: Product 6f1b... not found
+    Conflict:
+      description: Uniqueness or state conflict.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: CONFLICT
+              message: A category with that name already exists
+    RateLimited:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+        x-ratelimit-limit:
+          schema:
+            type: integer
+        x-ratelimit-remaining:
+          schema:
+            type: integer
+        x-ratelimit-reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: RATE_LIMITED
+              message: Too many requests
+    AuthNotConfigured:
+      description: OAuth is not configured; auth fails closed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: AUTH_NOT_CONFIGURED
+              message: Authentication is not configured
+
+  schemas:
+    SortOrder:
+      type: string
+      enum: [asc, desc]
+      default: asc
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: |
+                `VALIDATION_ERROR`, `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`,
+                `NOT_FOUND`, `PRODUCT_NOT_FOUND`, `CATEGORY_NOT_FOUND`,
+                `CUSTOMER_NOT_FOUND`, `SALE_NOT_FOUND`, `CONFLICT`,
+                `INSUFFICIENT_STOCK`, `RATE_LIMITED`, `AUTH_NOT_CONFIGURED`,
+                `INTERNAL_ERROR`.
+            message:
+              type: string
+            details:
+              type: array
+              description: Present only for validation failures.
+              items:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  message:
+                    type: string
+
+    Pagination:
+      type: object
+      required: [page, limit, total, totalPages]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+
+    Link:
+      type: object
+      required: [href]
+      properties:
+        href:
+          type: string
+        method:
+          type: string
+          enum: [GET, POST, PATCH, DELETE]
+
+    CollectionEnvelope:
+      type: object
+      required: [data, pagination, _links]
+      properties:
+        data:
+          type: array
+          items: {}
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        _links:
+          type: object
+          description: |
+            Always has `self`. `prev` is absent on the first page, `next` on the
+            last.
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+
+    User:
+      type: object
+      required: [id, email, name, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [ADMIN, MANAGER, CASHIER]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        _links:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+
+    CreateCategory:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    UpdateCategory:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Partial update; at least one field.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    Category:
+      allOf:
+        - $ref: "#/components/schemas/CreateCategory"
+        - type: object
+          required: [id, createdAt, updatedAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+            _links:
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/Link"
+
+    CreateProduct:
+      type: object
+      required: [sku, name, priceCents]
+      additionalProperties: false
+      properties:
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: [string, "null"]
+          maxLength: 2000
+        priceCents:
+          type: integer
+          minimum: 0
+          description: Integer cents.
+        stockQuantity:
+          type: integer
+          minimum: 0
+        categoryId:
+          type: [string, "null"]
+          format: uuid
+
+    UpdateProduct:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: [string, "null"]
+          maxLength: 2000
+        priceCents:
+          type: integer
+          minimum: 0
+        stockQuantity:
+          type: integer
+          minimum: 0
+        categoryId:
+          type: [string, "null"]
+          format: uuid
+
+    Product:
+      allOf:
+        - $ref: "#/components/schemas/CreateProduct"
+        - type: object
+          required: [id, stockQuantity, createdAt, updatedAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            stockQuantity:
+              type: integer
+              minimum: 0
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+            _links:
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/Link"
+
+    CreateCustomer:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: [string, "null"]
+          format: email
+          maxLength: 254
+        phone:
+          type: [string, "null"]
+          maxLength: 40
+
+    UpdateCustomer:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: [string, "null"]
+          format: email
+          maxLength: 254
+        phone:
+          type: [string, "null"]
+          maxLength: 40
+
+    Customer:
+      allOf:
+        - $ref: "#/components/schemas/CreateCustomer"
+        - type: object
+          required: [id, createdAt, updatedAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+            _links:
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/Link"
+
+    CreateSale:
+      type: object
+      required: [items]
+      additionalProperties: false
+      properties:
+        customerId:
+          type: [string, "null"]
+          format: uuid
+          description: Optional.
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: |
+            A product may not repeat in the same sale. Price is never supplied —
+            it comes from the product row.
+          items:
+            type: object
+            required: [productId, quantity]
+            additionalProperties: false
+            properties:
+              productId:
+                type: string
+                format: uuid
+              quantity:
+                type: integer
+                minimum: 1
+                maximum: 1000000
+
+    SaleItem:
+      type: object
+      required: [id, productId, quantity, unitPriceCents, subtotalCents]
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+        unitPriceCents:
+          type: integer
+          minimum: 0
+          description: Priced from the database at sale time.
+        subtotalCents:
+          type: integer
+          minimum: 0
+          description: Always `quantity * unitPriceCents`.
+
+    SaleSummary:
+      type: object
+      required: [id, userId, status, totalCents, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: [string, "null"]
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+          description: The acting user.
+        status:
+          type: string
+          enum: [COMPLETED, CANCELLED]
+        totalCents:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Sale:
+      allOf:
+        - $ref: "#/components/schemas/SaleSummary"
+        - type: object
+          required: [items, itemCount]
+          properties:
+            itemCount:
+              type: integer
+              minimum: 1
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/SaleItem"
+
+    InventoryMovement:
+      type: object
+      required: [id, productId, type, quantity, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [SALE, PURCHASE, ADJUSTMENT, RETURN, CANCELLATION]
+        quantity:
+          type: integer
+          description: Signed; negative removes stock.
+        reason:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+        _links:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+
+    AdjustStock:
+      type: object
+      required: [productId, quantity, type]
+      additionalProperties: false
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: -1000000
+          maximum: 1000000
+          not:
+            const: 0
+          description: Positive adds stock, negative removes it.
+        type:
+          type: string
+          enum: [PURCHASE, ADJUSTMENT, RETURN]
+        reason:
+          type: [string, "null"]
+          maxLength: 500

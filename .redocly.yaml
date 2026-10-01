@@ -1,0 +1,18 @@
+# Lint rules for docs/openapi.yaml.
+#
+# Only structural problems matter here: a broken $ref or an invalid schema
+# makes the whole spec unusable. The disabled rules below are stylistic or
+# contradict this API's real behaviour:
+#
+#   info-license-strict      – a placeholder MIT name, no URL yet
+#   no-server-example.com    – localhost is the documented local server
+#   operation-2xx-response    – the OIDC routes answer 302, not 2xx JSON
+#   operation-4xx-response    – same two routes; their failure modes are 400/401
+extends:
+  - recommended
+
+rules:
+  info-license-strict: off
+  no-server-example.com: off
+  operation-2xx-response: off
+  operation-4xx-response: off

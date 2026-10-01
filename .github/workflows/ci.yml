@@ -58,6 +58,12 @@ jobs:
       - name: Integration tests (SQLite + PostgreSQL)
         run: pnpm test:integration
 
+      - name: Validate the OpenAPI spec
+        run: pnpm test:spec
+
+      - name: Spec/route agreement tests
+        run: pnpm test:docs
+
       - name: Build
         run: pnpm build
 

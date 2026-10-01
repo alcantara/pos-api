@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@redocly/cli": "^2.57.0",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.3",
     "drizzle-kit": "^0.31.11",
@@ -25,7 +26,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.71.0",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "yaml": "^2.9.1"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -39,6 +41,8 @@
     "test:unit": "vitest run src/",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "vitest run tests/http",
+    "test:docs": "vitest run tests/docs",
+    "test:spec": "redocly lint --config .redocly.yaml docs/openapi.yaml",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate --config=drizzle.config.sqlite.ts && drizzle-kit generate --config=drizzle.config.postgres.ts",
     "db:migrate": "tsx src/infrastructure/database/migrate.ts",
