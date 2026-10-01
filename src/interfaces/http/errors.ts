@@ -26,6 +26,7 @@ const STATUS_BY_CODE: Record<string, number> = {
   CONFLICT: 409,
   INSUFFICIENT_STOCK: 409,
   RATE_LIMITED: 429,
+  AUTH_NOT_CONFIGURED: 503,
 };
 
 /** Fastify errors carry a `statusCode`; anything else is treated as a 500. */

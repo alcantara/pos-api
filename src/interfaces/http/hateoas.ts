@@ -7,6 +7,14 @@ export interface Link {
 
 export type Links = Record<string, Link>;
 
+export function authLinks(): Links {
+  return {
+    self: { href: `${API_PREFIX}/auth/me` },
+    login: { href: `${API_PREFIX}/auth/login` },
+    logout: { href: `${API_PREFIX}/auth/logout`, method: "POST" },
+  };
+}
+
 export function customerLinks(id: string): Links {
   const href = `${API_PREFIX}/customers/${id}`;
   return {
