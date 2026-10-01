@@ -43,11 +43,11 @@ export async function buildAuthenticatedApp(
     LOG_LEVEL: "silent",
     DATABASE_URL: options.databaseUrl ?? "file::memory:",
     COOKIE_SECRET: TEST_COOKIE_SECRET,
+    CSRF_PROTECTION: options.csrfProtection === false ? "false" : "true",
+    RATE_LIMIT_MAX: "100000",
   });
 
-  const csrfEnabled = options.csrfProtection ?? true;
-  process.env.CSRF_PROTECTION = csrfEnabled ? "true" : "false";
-  process.env.RATE_LIMIT_MAX = "10000";
+  const csrfEnabled = options.csrfProtection !== false;
 
   const { dependencies, close } = await createDependencies(env);
   const now = Date.now();

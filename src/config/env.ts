@@ -6,6 +6,8 @@ const unsetIfEmpty = <T extends z.ZodType>(schema: T) =>
 
 const OAUTH_CORE = ["OAUTH_ISSUER", "OAUTH_CLIENT_ID", "OAUTH_CLIENT_SECRET"] as const;
 
+const CSV_PATTERN = /^[^,\s]+(\s*,\s*[^,\s]+)*$/;
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -21,6 +23,22 @@ const envSchema = z
     OAUTH_AUDIENCE: unsetIfEmpty(z.string().min(1)),
     OAUTH_REDIRECT_URI: unsetIfEmpty(z.url()),
     COOKIE_SECRET: unsetIfEmpty(z.string().min(32)),
+    RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(120),
+    RATE_LIMIT_WINDOW_MS: z.coerce
+      .number()
+      .int()
+      .min(1000)
+      .max(3_600_000)
+      .default(60_000),
+    CORS_ORIGINS: unsetIfEmpty(
+      z.string().refine((value) => CSV_PATTERN.test(value.trim()), {
+        message: "must be a comma-separated list of origins",
+      }),
+    ),
+    CSRF_PROTECTION: z
+      .enum(["strict", "true", "false"])
+      .default("strict")
+      .transform((value) => value !== "false"),
   })
   .superRefine((value, ctx) => {
     const provided = OAUTH_CORE.filter((key) => value[key] !== undefined);

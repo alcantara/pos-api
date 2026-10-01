@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Dependencies } from "./application/dependencies.js";
 import type { Env } from "./config/env.js";
-import { loadSecurityConfig } from "./config/security.js";
+import { toSecurityConfig } from "./config/security.js";
 import { createDependencies } from "./infrastructure/dependencies.js";
 import { createRoleGuard } from "./interfaces/http/authz.js";
 import { CSRF_COOKIE } from "./interfaces/http/cookies.js";
@@ -32,7 +32,7 @@ export async function buildApp(
       ? await createDependencies(env)
       : { dependencies: provided, close: () => Promise.resolve() };
 
-  const security = loadSecurityConfig(process.env);
+  const security = toSecurityConfig(env);
   const isProduction = env.NODE_ENV === "production";
 
   const app = Fastify({

@@ -1,50 +1,61 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../../src/app.js";
 import { loadEnv } from "../../src/config/env.js";
-import { loadSecurityConfig } from "../../src/config/security.js";
+import { toSecurityConfig } from "../../src/config/security.js";
 import { createRateLimiter } from "../../src/interfaces/http/errors.js";
 
-describe("loadSecurityConfig", () => {
-  it("applies safe defaults", () => {
-    const config = loadSecurityConfig({});
+function securityFrom(source: Record<string, unknown>) {
+  return toSecurityConfig(
+    loadEnv({
+      NODE_ENV: "test",
+      PORT: "3000",
+      LOG_LEVEL: "silent",
+      DATABASE_URL: "file::memory:",
+      ...source,
+    }),
+  );
+}
 
-    expect(config).toEqual({
+describe("hardening configuration", () => {
+  it("applies safe defaults", () => {
+    expect(securityFrom({})).toEqual({
       rateLimitMax: 120,
       rateLimitWindowMs: 60_000,
       corsOrigins: null,
       csrfProtection: true,
+      hsts: false,
     });
   });
 
   it("treats empty strings as unset", () => {
-    const config = loadSecurityConfig({ CORS_ORIGINS: "" });
-
-    expect(config.corsOrigins).toBeNull();
+    expect(securityFrom({ CORS_ORIGINS: "" }).corsOrigins).toBeNull();
   });
 
   it("splits and trims the CORS allowlist", () => {
-    const config = loadSecurityConfig({
-      CORS_ORIGINS: "https://pos.example, https://admin.example",
-    });
-
-    expect(config.corsOrigins).toEqual([
-      "https://pos.example",
-      "https://admin.example",
-    ]);
+    expect(
+      securityFrom({ CORS_ORIGINS: "https://pos.example, https://admin.example" })
+        .corsOrigins,
+    ).toEqual(["https://pos.example", "https://admin.example"]);
   });
 
   it("can disable CSRF protection explicitly", () => {
-    expect(loadSecurityConfig({ CSRF_PROTECTION: "false" }).csrfProtection).toBe(false);
-    expect(loadSecurityConfig({ CSRF_PROTECTION: "true" }).csrfProtection).toBe(true);
+    expect(securityFrom({ CSRF_PROTECTION: "false" }).csrfProtection).toBe(false);
+    expect(securityFrom({ CSRF_PROTECTION: "true" }).csrfProtection).toBe(true);
+  });
+
+  it("only enables HSTS in production", () => {
+    expect(securityFrom({ NODE_ENV: "production" }).hsts).toBe(true);
+    expect(securityFrom({ NODE_ENV: "development" }).hsts).toBe(false);
   });
 
   it.each([
     ["RATE_LIMIT_MAX", "0"],
     ["RATE_LIMIT_MAX", "1.5"],
     ["RATE_LIMIT_WINDOW_MS", "10"],
+    ["CORS_ORIGINS", "https://a.example,,https://b.example"],
   ])("rejects an invalid %s=%s", (key, value) => {
-    expect(() => loadSecurityConfig({ [key]: value })).toThrow(
-      /Invalid security configuration/,
+    expect(() => securityFrom({ [key]: value })).toThrow(
+      /Invalid environment configuration/,
     );
   });
 });
@@ -93,9 +104,6 @@ describe("hardening at the HTTP edge", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
 
   beforeAll(async () => {
-    process.env.CSRF_PROTECTION = "false";
-    process.env.RATE_LIMIT_MAX = "3";
-    process.env.CORS_ORIGINS = "https://pos.example";
     app = await buildApp(
       loadEnv({
         NODE_ENV: "test",
@@ -103,15 +111,15 @@ describe("hardening at the HTTP edge", () => {
         LOG_LEVEL: "silent",
         DATABASE_URL: "file::memory:",
         COOKIE_SECRET: "s".repeat(48),
+        CSRF_PROTECTION: "false",
+        RATE_LIMIT_MAX: "3",
+        CORS_ORIGINS: "https://pos.example",
       }),
     );
   });
 
   afterAll(async () => {
     await app.close();
-    delete process.env.CORS_ORIGINS;
-    process.env.CSRF_PROTECTION = "true";
-    process.env.RATE_LIMIT_MAX = "10000";
   });
 
   it("sets the hardening headers on every response", async () => {
@@ -178,9 +186,6 @@ describe("CSRF double-submit protection", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
 
   beforeAll(async () => {
-    process.env.CSRF_PROTECTION = "true";
-    process.env.RATE_LIMIT_MAX = "10000";
-    delete process.env.CORS_ORIGINS;
     app = await buildApp(
       loadEnv({
         NODE_ENV: "test",
@@ -188,13 +193,13 @@ describe("CSRF double-submit protection", () => {
         LOG_LEVEL: "silent",
         DATABASE_URL: "file::memory:",
         COOKIE_SECRET: "s".repeat(48),
+        CSRF_PROTECTION: "true",
       }),
     );
   });
 
   afterAll(async () => {
     await app.close();
-    process.env.CSRF_PROTECTION = "true";
   });
 
   const session = "irrelevant-token";
