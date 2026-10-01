@@ -330,4 +330,71 @@ describe("products HTTP API", () => {
       expect(response.json().error.code).toBe("PRODUCT_NOT_FOUND");
     });
   });
+
+  describe("category references", () => {
+    it("creates a product under an existing category", async () => {
+      const category = await app.inject({
+        method: "POST",
+        url: "/api/v1/categories",
+        payload: { name: `Cat ${randomUUID()}` },
+      });
+      const categoryId = category.json().id;
+
+      const response = await createProduct({
+        sku: `REF-${randomUUID()}`,
+        name: "Categorized product",
+        priceCents: 500,
+        categoryId,
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().categoryId).toBe(categoryId);
+    });
+
+    it("rejects create with an unknown categoryId (400)", async () => {
+      const response = await createProduct({
+        sku: `REF-${randomUUID()}`,
+        name: "Bad reference",
+        priceCents: 500,
+        categoryId: randomUUID(),
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json();
+      expect(body.error.code).toBe("VALIDATION_ERROR");
+      expect(body.error.message).toContain("category");
+    });
+
+    it("assigns and clears categoryId via PATCH", async () => {
+      const category = await app.inject({
+        method: "POST",
+        url: "/api/v1/categories",
+        payload: { name: `Cat ${randomUUID()}` },
+      });
+      const categoryId = category.json().id;
+
+      const created = await createProduct({
+        sku: `REF-${randomUUID()}`,
+        name: "Patchable",
+        priceCents: 500,
+      });
+      const { id } = created.json();
+
+      const assigned = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/products/${id}`,
+        payload: { categoryId },
+      });
+      expect(assigned.statusCode).toBe(200);
+      expect(assigned.json().categoryId).toBe(categoryId);
+
+      const cleared = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/products/${id}`,
+        payload: { categoryId: null },
+      });
+      expect(cleared.statusCode).toBe(200);
+      expect(cleared.json().categoryId).toBeNull();
+    });
+  });
 });
