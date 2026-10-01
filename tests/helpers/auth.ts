@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, InjectOptions } from "fastify";
+import { buildApp } from "../../src/app.js";
 import { createSessionToken } from "../../src/application/auth/session.js";
 import type { Dependencies } from "../../src/application/dependencies.js";
 import { loadEnv } from "../../src/config/env.js";
 import type { Role, User } from "../../src/domain/entities/user.js";
 import { createDependencies } from "../../src/infrastructure/dependencies.js";
-import { buildApp } from "../../src/app.js";
 
 export const TEST_COOKIE_SECRET = "s".repeat(48);
+export const TEST_CSRF_TOKEN = "t".repeat(64);
+export const CSRF_HEADER = "x-csrf-token";
 
 type InjectResponse = Awaited<ReturnType<FastifyInstance["inject"]>>;
 
@@ -33,15 +35,19 @@ function seededUser(role: Role, now: number): User {
 }
 
 export async function buildAuthenticatedApp(
-  databaseUrl = "file::memory:",
+  options: { databaseUrl?: string; csrfProtection?: boolean } = {},
 ): Promise<AuthenticatedApp> {
   const env = loadEnv({
     NODE_ENV: "test",
     PORT: "3000",
     LOG_LEVEL: "silent",
-    DATABASE_URL: databaseUrl,
+    DATABASE_URL: options.databaseUrl ?? "file::memory:",
     COOKIE_SECRET: TEST_COOKIE_SECRET,
   });
+
+  const csrfEnabled = options.csrfProtection ?? true;
+  process.env.CSRF_PROTECTION = csrfEnabled ? "true" : "false";
+  process.env.RATE_LIMIT_MAX = "10000";
 
   const { dependencies, close } = await createDependencies(env);
   const now = Date.now();
@@ -60,7 +66,19 @@ export async function buildAuthenticatedApp(
   });
 
   const cookie = (role: Role): string =>
-    `pos_session=${createSessionToken(users[role].id, TEST_COOKIE_SECRET)}`;
+    `pos_session=${createSessionToken(users[role].id, TEST_COOKIE_SECRET)}` +
+    (csrfEnabled ? `; pos_csrf=${TEST_CSRF_TOKEN}` : "");
+
+  const withCsrf = (headers: InjectOptions["headers"]): Record<string, string> => {
+    const base: Record<string, string> = {};
+    if (headers) {
+      for (const [key, value] of Object.entries(headers)) {
+        if (typeof value === "string") base[key] = value;
+      }
+    }
+    if (csrfEnabled) base[CSRF_HEADER] = TEST_CSRF_TOKEN;
+    return base;
+  };
 
   return {
     app,
@@ -70,7 +88,7 @@ export async function buildAuthenticatedApp(
     inject: (options, role = "MANAGER") =>
       app.inject({
         ...options,
-        headers: { ...options.headers, cookie: cookie(role) },
+        headers: { ...withCsrf(options.headers), cookie: cookie(role) },
       }),
     injectAnonymous: (options) => app.inject(options),
   };

@@ -10,6 +10,8 @@ import {
 } from "../../../domain/errors/domain-error.js";
 import {
   clearCookie,
+  CSRF_COOKIE,
+  csrfToken,
   PENDING_LOGIN_COOKIE,
   parseCookies,
   SESSION_COOKIE,
@@ -81,8 +83,14 @@ export function createAuthController(
         cookieSecret,
       });
 
+      const csrf = csrfToken();
       reply.header("set-cookie", [
         serializeCookie(SESSION_COOKIE, outcome.sessionToken, {
+          path: "/",
+          maxAge: outcome.sessionMaxAge,
+          secure,
+        }),
+        serializeCookie(CSRF_COOKIE, csrf, {
           path: "/",
           maxAge: outcome.sessionMaxAge,
           secure,
@@ -102,7 +110,10 @@ export function createAuthController(
     },
 
     logout: async (_request, reply) => {
-      reply.header("set-cookie", clearCookie(SESSION_COOKIE, { path: "/", secure }));
+      reply.header("set-cookie", [
+        clearCookie(SESSION_COOKIE, { path: "/", secure }),
+        clearCookie(CSRF_COOKIE, { path: "/", secure }),
+      ]);
       return reply.code(204).send();
     },
   };

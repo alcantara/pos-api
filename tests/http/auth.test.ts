@@ -292,17 +292,28 @@ describe("auth HTTP API", () => {
   });
 
   describe("POST /api/v1/auth/logout", () => {
-    it("expires the session cookie with 204", async () => {
+    it("expires the session and CSRF cookies with 204", async () => {
+      const journey = await completeLogin({ email: "logout@example.com" });
+      const cookies = setCookiesOf(journey.response);
+      const session = cookieValue(cookies, "pos_session")!;
+      const csrf = cookieValue(cookies, "pos_csrf")!;
+
       const response = await app.inject({
         method: "POST",
         url: "/api/v1/auth/logout",
+        headers: {
+          cookie: `pos_session=${session}; pos_csrf=${csrf}`,
+          "x-csrf-token": csrf,
+        },
       });
 
       expect(response.statusCode).toBe(204);
       expect(response.body).toBe("");
-      const cleared = setCookiesOf(response).find((c) => c.startsWith("pos_session="));
-      expect(cleared).toContain("Max-Age=0");
-      expect(cleared).toContain("Path=/");
+      const cleared = setCookiesOf(response);
+      const sessionCleared = cleared.find((c) => c.startsWith("pos_session="));
+      expect(sessionCleared).toContain("Max-Age=0");
+      expect(sessionCleared).toContain("Path=/");
+      expect(cleared.find((c) => c.startsWith("pos_csrf="))).toContain("Max-Age=0");
     });
   });
 });

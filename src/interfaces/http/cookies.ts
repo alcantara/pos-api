@@ -1,5 +1,12 @@
+import { randomBytes } from "node:crypto";
+
 export const SESSION_COOKIE = "pos_session";
 export const PENDING_LOGIN_COOKIE = "pos_oauth";
+export const CSRF_COOKIE = "pos_csrf";
+
+export function csrfToken(): string {
+  return randomBytes(32).toString("hex");
+}
 
 export interface CookieOptions {
   path: string;

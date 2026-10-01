@@ -2,6 +2,74 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { DomainError } from "../../domain/errors/domain-error.js";
 
+export interface RateLimitDecision {
+  allowed: boolean;
+  remaining: number;
+  retryAfterSeconds: number;
+}
+
+export type RateLimiter = (key: string) => RateLimitDecision;
+
+export function createRateLimiter(max: number, windowMs: number): RateLimiter {
+  const hits = new Map<string, { count: number; resetAt: number }>();
+
+  return (key) => {
+    const now = Date.now();
+    const current = hits.get(key);
+    if (!current || current.resetAt <= now) {
+      hits.set(key, { count: 1, resetAt: now + windowMs });
+      return {
+        allowed: true,
+        remaining: max - 1,
+        retryAfterSeconds: Math.ceil(windowMs / 1000),
+      };
+    }
+
+    current.count += 1;
+    if (current.count > max) {
+      return {
+        allowed: false,
+        remaining: 0,
+        retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000)),
+      };
+    }
+    return {
+      allowed: true,
+      remaining: max - current.count,
+      retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000)),
+    };
+  };
+}
+
+export interface RateLimitOptions {
+  limiter: RateLimiter;
+  max: number;
+  skip: (request: { url: string; method: string }) => boolean;
+}
+
+export function registerRateLimit(
+  app: FastifyInstance,
+  options: RateLimitOptions,
+): void {
+  const { limiter, max, skip } = options;
+
+  app.addHook("onRequest", async (request, reply) => {
+    if (skip(request)) return;
+
+    const decision = limiter(request.ip);
+    reply.header("x-ratelimit-limit", String(max));
+    reply.header("x-ratelimit-remaining", String(Math.max(0, decision.remaining)));
+    reply.header("x-ratelimit-reset", String(Math.ceil(decision.retryAfterSeconds)));
+
+    if (decision.allowed) return;
+
+    reply.header("retry-after", String(decision.retryAfterSeconds));
+    await reply
+      .code(429)
+      .send({ error: { code: "RATE_LIMITED", message: "Too many requests" } });
+  });
+}
+
 interface ErrorEnvelope {
   error: {
     code: string;
