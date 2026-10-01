@@ -7,6 +7,15 @@ export interface Link {
 
 export type Links = Record<string, Link>;
 
+export function customerLinks(id: string): Links {
+  const href = `${API_PREFIX}/customers/${id}`;
+  return {
+    self: { href },
+    update: { href, method: "PATCH" },
+    delete: { href, method: "DELETE" },
+  };
+}
+
 export function categoryLinks(id: string): Links {
   const href = `${API_PREFIX}/categories/${id}`;
   return {

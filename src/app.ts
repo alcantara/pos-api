@@ -4,6 +4,7 @@ import { createDependencies } from "./infrastructure/dependencies.js";
 import { registerErrorHandling } from "./interfaces/http/errors.js";
 import { API_PREFIX } from "./interfaces/http/hateoas.js";
 import { registerCategoryRoutes } from "./interfaces/http/routes/category-routes.js";
+import { registerCustomerRoutes } from "./interfaces/http/routes/customer-routes.js";
 import { registerProductRoutes } from "./interfaces/http/routes/product-routes.js";
 
 /**
@@ -30,6 +31,7 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
     (api) => {
       registerProductRoutes(api, dependencies);
       registerCategoryRoutes(api, dependencies);
+      registerCustomerRoutes(api, dependencies);
     },
     { prefix: API_PREFIX },
   );
