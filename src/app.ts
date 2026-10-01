@@ -8,6 +8,7 @@ import { API_PREFIX } from "./interfaces/http/hateoas.js";
 import { registerAuthRoutes } from "./interfaces/http/routes/auth-routes.js";
 import { registerCategoryRoutes } from "./interfaces/http/routes/category-routes.js";
 import { registerCustomerRoutes } from "./interfaces/http/routes/customer-routes.js";
+import { registerInventoryRoutes } from "./interfaces/http/routes/inventory-routes.js";
 import { registerProductRoutes } from "./interfaces/http/routes/product-routes.js";
 import { registerSaleRoutes } from "./interfaces/http/routes/sale-routes.js";
 
@@ -40,6 +41,7 @@ export async function buildApp(
       registerCategoryRoutes(api, dependencies, requireRole);
       registerCustomerRoutes(api, dependencies, requireRole);
       registerSaleRoutes(api, dependencies, requireRole, env);
+      registerInventoryRoutes(api, dependencies, requireRole);
       registerAuthRoutes(api, dependencies, env);
     },
     { prefix: API_PREFIX },
