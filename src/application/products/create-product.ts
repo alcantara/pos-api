@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { ConflictError } from "../../domain/errors/domain-error.js";
+import { ConflictError, ValidationError } from "../../domain/errors/domain-error.js";
 import type { Product } from "../../domain/entities/product.js";
+import type { CategoryLookup } from "../ports/category-repository.js";
 import type { ProductRepository } from "../ports/product-repository.js";
 
 export interface CreateProductInput {
@@ -9,19 +10,29 @@ export interface CreateProductInput {
   description?: string | null;
   priceCents: number;
   stockQuantity?: number;
+  categoryId?: string | null;
 }
 
 /**
  * Input is validated at the HTTP boundary (Zod); this use case coordinates
- * uniqueness and persistence.
+ * uniqueness, the optional category reference and persistence.
  */
 export async function createProduct(
   repository: ProductRepository,
+  categories: CategoryLookup,
   input: CreateProductInput,
 ): Promise<Product> {
   const existing = await repository.findBySku(input.sku);
   if (existing) {
     throw new ConflictError(`A product with SKU "${input.sku}" already exists`);
+  }
+
+  const categoryId = input.categoryId ?? null;
+  if (categoryId) {
+    const category = await categories.findById(categoryId);
+    if (!category) {
+      throw new ValidationError("The referenced category does not exist");
+    }
   }
 
   const now = Date.now();
@@ -32,7 +43,7 @@ export async function createProduct(
     description: input.description ?? null,
     priceCents: input.priceCents,
     stockQuantity: input.stockQuantity ?? 0,
-    categoryId: null,
+    categoryId,
     createdAt: now,
     updatedAt: now,
   };

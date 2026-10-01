@@ -61,7 +61,11 @@ export function createProductController(dependencies: Dependencies): ProductCont
 
     create: async (request, reply) => {
       const input = createProductSchema.parse(request.body);
-      const product = await createProduct(dependencies.products, input);
+      const product = await createProduct(
+        dependencies.products,
+        dependencies.categories,
+        input,
+      );
       reply.header("Location", `${API_PREFIX}/products/${product.id}`);
       return reply.code(201).send(productRepresentation(product));
     },
@@ -75,7 +79,14 @@ export function createProductController(dependencies: Dependencies): ProductCont
     update: async (request, reply) => {
       const { id } = productIdParamsSchema.parse(request.params);
       const changes = updateProductSchema.parse(request.body);
-      const product = await updateProduct(dependencies.products, { id, changes });
+      const product = await updateProduct(
+        dependencies.products,
+        dependencies.categories,
+        {
+          id,
+          changes,
+        },
+      );
       return reply.code(200).send(productRepresentation(product));
     },
 

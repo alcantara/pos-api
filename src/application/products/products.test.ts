@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import type { CategoryLookup } from "../ports/category-repository.js";
 import type {
   ListProductsParams,
   PagedProducts,
@@ -7,12 +8,29 @@ import type {
 } from "../ports/product-repository.js";
 import type { Product } from "../../domain/entities/product.js";
 import { ProductNotFoundError } from "../../domain/entities/product.js";
-import { ConflictError } from "../../domain/errors/domain-error.js";
+import { ConflictError, ValidationError } from "../../domain/errors/domain-error.js";
 import { createProduct } from "./create-product.js";
 import { deleteProduct } from "./delete-product.js";
 import { getProduct } from "./get-product.js";
 import { listProducts } from "./list-products.js";
 import { updateProduct } from "./update-product.js";
+
+const KNOWN_CATEGORY_ID = randomUUID();
+
+/** Category lookup fake: exactly one category exists. */
+const categories: CategoryLookup = {
+  findById: (id) =>
+    Promise.resolve(
+      id === KNOWN_CATEGORY_ID
+        ? {
+            id,
+            name: "Keyboards",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          }
+        : null,
+    ),
+};
 
 class InMemoryProductRepository implements ProductRepository {
   private readonly rows = new Map<string, Product>();
@@ -87,7 +105,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
 describe("createProduct", () => {
   it("generates id/timestamps and applies defaults", async () => {
     const repository = new InMemoryProductRepository();
-    const product = await createProduct(repository, {
+    const product = await createProduct(repository, categories, {
       sku: "KB-001",
       name: "Keyboard",
       priceCents: 19990,
@@ -108,8 +126,38 @@ describe("createProduct", () => {
     await repository.insert(makeProduct({ sku: "DUP" }));
 
     await expect(
-      createProduct(repository, { sku: "DUP", name: "Other", priceCents: 1 }),
+      createProduct(repository, categories, {
+        sku: "DUP",
+        name: "Other",
+        priceCents: 1,
+      }),
     ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("stores an existing categoryId", async () => {
+    const repository = new InMemoryProductRepository();
+    const product = await createProduct(repository, categories, {
+      sku: "CAT-001",
+      name: "With category",
+      priceCents: 100,
+      categoryId: KNOWN_CATEGORY_ID,
+    });
+
+    expect(product.categoryId).toBe(KNOWN_CATEGORY_ID);
+    expect(await repository.findById(product.id)).toEqual(product);
+  });
+
+  it("rejects an unknown categoryId with ValidationError", async () => {
+    const repository = new InMemoryProductRepository();
+    const error = await createProduct(repository, categories, {
+      sku: "CAT-002",
+      name: "Bad category",
+      priceCents: 100,
+      categoryId: randomUUID(),
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(ValidationError);
+    expect((error as ValidationError).code).toBe("VALIDATION_ERROR");
   });
 });
 
@@ -185,7 +233,7 @@ describe("updateProduct", () => {
     const product = makeProduct();
     await repository.insert(product);
 
-    const updated = await updateProduct(repository, {
+    const updated = await updateProduct(repository, categories, {
       id: product.id,
       changes: { name: "Mechanical Keyboard" },
     });
@@ -201,7 +249,7 @@ describe("updateProduct", () => {
     const product = makeProduct({ description: "old text" });
     await repository.insert(product);
 
-    const updated = await updateProduct(repository, {
+    const updated = await updateProduct(repository, categories, {
       id: product.id,
       changes: { description: null },
     });
@@ -212,7 +260,10 @@ describe("updateProduct", () => {
   it("throws PRODUCT_NOT_FOUND for a missing product", async () => {
     const repository = new InMemoryProductRepository();
     await expect(
-      updateProduct(repository, { id: randomUUID(), changes: { name: "x" } }),
+      updateProduct(repository, categories, {
+        id: randomUUID(),
+        changes: { name: "x" },
+      }),
     ).rejects.toBeInstanceOf(ProductNotFoundError);
   });
 
@@ -223,8 +274,42 @@ describe("updateProduct", () => {
     await repository.insert(product);
 
     await expect(
-      updateProduct(repository, { id: product.id, changes: { sku: "TAKEN" } }),
+      updateProduct(repository, categories, {
+        id: product.id,
+        changes: { sku: "TAKEN" },
+      }),
     ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("assigns and clears categoryId", async () => {
+    const repository = new InMemoryProductRepository();
+    const product = makeProduct();
+    await repository.insert(product);
+
+    const assigned = await updateProduct(repository, categories, {
+      id: product.id,
+      changes: { categoryId: KNOWN_CATEGORY_ID },
+    });
+    expect(assigned.categoryId).toBe(KNOWN_CATEGORY_ID);
+
+    const cleared = await updateProduct(repository, categories, {
+      id: product.id,
+      changes: { categoryId: null },
+    });
+    expect(cleared.categoryId).toBeNull();
+  });
+
+  it("rejects updating to an unknown categoryId", async () => {
+    const repository = new InMemoryProductRepository();
+    const product = makeProduct();
+    await repository.insert(product);
+
+    await expect(
+      updateProduct(repository, categories, {
+        id: product.id,
+        changes: { categoryId: randomUUID() },
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 });
 

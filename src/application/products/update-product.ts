@@ -1,5 +1,6 @@
-import { ConflictError } from "../../domain/errors/domain-error.js";
+import { ConflictError, ValidationError } from "../../domain/errors/domain-error.js";
 import { type Product, ProductNotFoundError } from "../../domain/entities/product.js";
+import type { CategoryLookup } from "../ports/category-repository.js";
 import type { ProductRepository } from "../ports/product-repository.js";
 
 export interface UpdateProductInput {
@@ -10,11 +11,13 @@ export interface UpdateProductInput {
     description?: string | null;
     priceCents?: number;
     stockQuantity?: number;
+    categoryId?: string | null;
   };
 }
 
 export async function updateProduct(
   repository: ProductRepository,
+  categories: CategoryLookup,
   input: UpdateProductInput,
 ): Promise<Product> {
   const current = await repository.findById(input.id);
@@ -30,6 +33,17 @@ export async function updateProduct(
     }
   }
 
+  let categoryId = current.categoryId;
+  if (changes.categoryId !== undefined) {
+    categoryId = changes.categoryId;
+    if (categoryId) {
+      const category = await categories.findById(categoryId);
+      if (!category) {
+        throw new ValidationError("The referenced category does not exist");
+      }
+    }
+  }
+
   const updated: Product = {
     ...current,
     sku: changes.sku ?? current.sku,
@@ -38,6 +52,7 @@ export async function updateProduct(
       changes.description !== undefined ? changes.description : current.description,
     priceCents: changes.priceCents ?? current.priceCents,
     stockQuantity: changes.stockQuantity ?? current.stockQuantity,
+    categoryId,
     updatedAt: Date.now(),
   };
 
