@@ -40,11 +40,14 @@ pnpm dev
 | `pnpm docker:down:volumes` | stops the stack and **deletes** the database volume   |
 | `pnpm docker:stack`        | builds the image and runs the API against PostgreSQL  |
 
-The service publishes `127.0.0.1:5432` by default. If a local PostgreSQL
-already owns 5432, choose another host port:
+`pnpm docker:up` probes for a free host port starting at 5432 (override with
+`POSTGRES_HOST_PORT`). When 5432 is already taken by a local PostgreSQL it picks
+the next free port and prints the matching `TEST_POSTGRES_URL`, so the command
+works either way:
 
-```bash
-POSTGRES_HOST_PORT=5433 pnpm docker:up
+```
+port 5432 is busy — using 5433 instead
+set TEST_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5433/pos_test
 ```
 
 `docker/postgres/init.sql` creates `pos_dev` and `pos_test` the first time the
