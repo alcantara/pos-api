@@ -38,3 +38,24 @@ export class ValidationError extends DomainError {
     super(message);
   }
 }
+
+/** Missing or invalid credentials/session — maps to HTTP 401. */
+export class UnauthorizedError extends DomainError {
+  readonly code = "UNAUTHORIZED";
+
+  constructor(message = "Authentication required") {
+    super(message);
+  }
+}
+
+/**
+ * Auth cannot run because configuration (OIDC credentials or cookie secret)
+ * is absent — maps to HTTP 503. Auth must fail closed, never open.
+ */
+export class AuthNotConfiguredError extends DomainError {
+  readonly code = "AUTH_NOT_CONFIGURED";
+
+  constructor(message = "Authentication is not configured") {
+    super(message);
+  }
+}

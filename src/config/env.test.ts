@@ -35,4 +35,58 @@ describe("loadEnv", () => {
       /Invalid environment configuration/,
     );
   });
+
+  it("treats empty OAuth values as unset", () => {
+    const env = loadEnv({
+      DATABASE_URL: "file:./dev.db",
+      OAUTH_ISSUER: "",
+      OAUTH_CLIENT_ID: "",
+      COOKIE_SECRET: "",
+    });
+
+    expect(env.OAUTH_ISSUER).toBeUndefined();
+    expect(env.OAUTH_CLIENT_ID).toBeUndefined();
+    expect(env.COOKIE_SECRET).toBeUndefined();
+  });
+
+  it("rejects a partially configured OAuth set", () => {
+    expect(() =>
+      loadEnv({
+        DATABASE_URL: "file:./dev.db",
+        OAUTH_ISSUER: "https://idp.test",
+      }),
+    ).toThrow(/OAUTH_CLIENT_ID/);
+  });
+
+  it("accepts a complete OAuth configuration", () => {
+    const env = loadEnv({
+      DATABASE_URL: "file:./dev.db",
+      OAUTH_ISSUER: "https://idp.test",
+      OAUTH_CLIENT_ID: "pos-client",
+      OAUTH_CLIENT_SECRET: "secret",
+      OAUTH_AUDIENCE: "pos-api",
+      OAUTH_REDIRECT_URI: "https://api.test/api/v1/auth/callback",
+      COOKIE_SECRET: "x".repeat(48),
+    });
+
+    expect(env.OAUTH_ISSUER).toBe("https://idp.test");
+    expect(env.COOKIE_SECRET).toHaveLength(48);
+  });
+
+  it("rejects an invalid OAUTH_ISSUER URL", () => {
+    expect(() =>
+      loadEnv({
+        DATABASE_URL: "file:./dev.db",
+        OAUTH_ISSUER: "not-a-url",
+        OAUTH_CLIENT_ID: "pos-client",
+        OAUTH_CLIENT_SECRET: "secret",
+      }),
+    ).toThrow(/OAUTH_ISSUER/);
+  });
+
+  it("rejects a short COOKIE_SECRET", () => {
+    expect(() =>
+      loadEnv({ DATABASE_URL: "file:./dev.db", COOKIE_SECRET: "short" }),
+    ).toThrow(/COOKIE_SECRET/);
+  });
 });
